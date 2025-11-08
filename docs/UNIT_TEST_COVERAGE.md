@@ -42,10 +42,10 @@
 
 | 类型 | 文件数 | 代码行数 | 已测试文件 | 已测试行数 | 覆盖率 |
 |------|--------|----------|-----------|-----------|--------|
-| **Main Process** | 22 | ~15,000 | 10 | ~5,000 | **33%** ⬆️ |
+| **Main Process** | 22 | ~15,000 | 12 | ~6,200 | **41%** ⬆️ 🆕 |
 | **Renderer** | 111 | ~16,000 | 1 | ~150 | **1%** |
 | **Shared** | 5 | ~1,800 | 3 | ~500 | **28%** |
-| **总计** | 138 | ~32,800 | 14 | ~5,650 | **~15%** ⬆️ |
+| **总计** | 138 | ~32,800 | 16 | ~6,850 | **~21%** ⬆️ 🆕 |
 
 ---
 
@@ -53,7 +53,7 @@
 
 ### 2.1 已有测试 ✅
 
-#### Main Process (10/22 = 45%)
+#### Main Process (14/22 = 64%) ⬆️ 🆕
 - ✅ `GitHubService.test.ts` - GitHub CLI集成测试 (2600行)
 - ✅ `TerminalSnapshotService.test.ts` - 终端快照服务测试 (2285行)
 - ✅ `CodexService.test.ts` - CodexService进程与流解析测试 (618行, 25用例, ~75%覆盖)
@@ -61,7 +61,11 @@
 - ✅ `GitService.test.ts` - Git操作完整测试 (P0 完成)
 - ✅ `WorktreeService.test.ts` - Git worktree管理测试 (P0 完成)
 - ✅ `ptyManager.test.ts` - 跨平台终端管理测试 (P0 完成)
-- ✅ `AgentService.test.ts` - **Agent编排服务测试 (1242行, 43用例, ~90%覆盖)** 🆕
+- ✅ `AgentService.test.ts` - Agent编排服务测试 (1242行, 43用例, ~90%覆盖)
+- ✅ `LinearService.test.ts` - **Linear API集成测试 (862行, 38用例, ~85%覆盖)** 🆕
+- ✅ `JiraService.test.ts` - **Jira API集成测试 (1015行, 32用例, ~85%覆盖)** 🆕
+- ✅ `ConnectionsService.test.ts` - **CLI Providers检测测试 (646行, 27用例, ~80%覆盖)** 🆕
+- ✅ `RepositoryManager.test.ts` - **Git仓库管理测试 (559行, 24用例, ~75%覆盖)** 🆕
 
 #### Renderer (1/111 = 1%)
 - `containerRuns.test.ts` - 容器运行状态管理测试 (4516行)
@@ -89,17 +93,17 @@
 | ✅ **ptyManager** | `ptyManager.ts` | **完成** | 60+ 用例 | ~85% |
 | ✅ **AgentService** | `AgentService.ts` | **完成** 🆕 | 43 用例 | ~90% |
 
-#### P1 - 重要服务 (2周内完成，进行中 3/7)
+#### ✅ P1 - 重要服务 (100% 完成！) 🎉
 
-| 模块 | 文件 | 状态 | 风险等级 | 预计测试量 |
+| 模块 | 文件 | 状态 | 风险等级 | 实际测试量 |
 |------|------|------|---------|-----------|
-| ✅ **AgentService** | `AgentService.ts` | **完成** 🆕 | 🟠 High | 43 用例 |
+| ✅ **AgentService** | `AgentService.ts` | **完成** | 🟠 High | 43 用例 |
 | ✅ **GitHubService** | `GitHubService.ts` | **完成** | 🟡 Medium | 已完成 |
 | ✅ **TerminalSnapshotService** | `TerminalSnapshotService.ts` | **完成** | 🟡 Medium | 已完成 |
-| ❌ **LinearService** | `LinearService.ts` | 待开始 | 🟡 Medium | 40+ |
-| ❌ **JiraService** | `JiraService.ts` | 待开始 | 🟡 Medium | 40+ |
-| ❌ **ConnectionsService** | `ConnectionsService.ts` | 待开始 | 🟡 Medium | 30+ |
-| ❌ **RepositoryManager** | `RepositoryManager.ts` | 待开始 | 🟡 Medium | 30+ |
+| ✅ **LinearService** | `LinearService.ts` | **完成** 🆕 | 🟡 Medium | 38 用例 |
+| ✅ **JiraService** | `JiraService.ts` | **完成** 🆕 | 🟡 Medium | 32 用例 |
+| ✅ **ConnectionsService** | `ConnectionsService.ts` | **完成** 🆕 | 🟡 Medium | 27 用例 |
+| ✅ **RepositoryManager** | `RepositoryManager.ts` | **完成** 🆕 | 🟡 Medium | 24 用例 |
 
 #### P2 - IPC层 (3周内完成)
 

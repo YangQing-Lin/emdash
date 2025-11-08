@@ -163,7 +163,12 @@ class ConnectionsService {
       return 'connected';
     }
 
-    return result.error ? 'error' : 'missing';
+    const error = result.error as NodeJS.ErrnoException | undefined;
+    if (error?.code === 'ENOENT') {
+      return 'missing';
+    }
+
+    return error ? 'error' : 'missing';
   }
 
   private resolveMessage(
