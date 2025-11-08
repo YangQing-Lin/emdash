@@ -1,7 +1,7 @@
 # Emdash 测试文档中心
 
-> **最后更新**: 2025-11-07
-> **文档版本**: 1.0
+> **最后更新**: 2025-11-08
+> **文档版本**: 2.0
 
 ---
 
@@ -11,9 +11,25 @@
 
 | 文档 | 描述 | 适用人员 | 链接 |
 |------|------|----------|------|
+| **测试进度跟踪** | 📊 实时进度、里程碑、统计数据 | 所有人 | [PROGRESS.md](./PROGRESS.md) ⭐ |
 | **单元测试覆盖文档** | 详细的单元测试设计、优先级、Mock策略 | 所有开发者 | [UNIT_TEST_COVERAGE.md](../UNIT_TEST_COVERAGE.md) |
 | **CI测试覆盖文档** | CI/CD流水线配置、跨平台测试、性能优化 | DevOps、Tech Lead | [CI_TEST_COVERAGE.md](../CI_TEST_COVERAGE.md) |
-| **测试跟踪总览** | 进度看板、任务分配、风险管理、指标追踪 | 所有人 | [TEST_TRACKING.md](../TEST_TRACKING.md) |
+
+### 阶段计划文档 🆕
+
+| 阶段 | 文档 | 状态 | 时间线 | 链接 |
+|------|------|------|--------|------|
+| **P0+P1** | 核心模块与服务层 | ✅ 完成 | Nov 7-8 | [PROGRESS.md](./PROGRESS.md) |
+| **P2** | IPC 层与剩余服务 | 📋 计划中 | Nov 11-22 | [P2_PLAN.md](./P2_PLAN.md) 🆕 / [快速开始](./P2_QUICK_START.md) ⚡ |
+| **P3** | 渲染进程 Hooks 与组件 | 🔜 即将开始 | Nov 25 - Dec 6 | 待创建 |
+
+### 技术指南 🆕
+
+| 指南 | 描述 | 适用场景 | 链接 |
+|------|------|----------|------|
+| **IPC 测试指南** | Electron IPC 测试完整教程 | P2 阶段开发 | [IPC_TESTING_GUIDE.md](./IPC_TESTING_GUIDE.md) 🆕 |
+| Mock 策略指南 | Mock 模式与最佳实践 | 所有测试 | 待创建 |
+| 异步测试指南 | 处理异步、流、事件 | 复杂异步场景 | 待创建 |
 
 ---
 
@@ -21,28 +37,49 @@
 
 ### 我是新加入的开发者
 
-1. **了解现状**: 阅读 [TEST_TRACKING.md](../TEST_TRACKING.md) 第1-2节
-2. **认领任务**: 查看 [TEST_TRACKING.md](../TEST_TRACKING.md) 第3节找到未分配的模块
-3. **学习测试编写**: 阅读 [UNIT_TEST_COVERAGE.md](../UNIT_TEST_COVERAGE.md) 第7节
-4. **开始编写**: 选择一个P0模块开始
+1. **了解现状**: 阅读 [PROGRESS.md](./PROGRESS.md) - 查看当前进度和已完成模块
+2. **认领任务**: 查看 [P2_PLAN.md](./P2_PLAN.md) 找到待开始的模块
+3. **学习 IPC 测试**: 阅读 [IPC_TESTING_GUIDE.md](./IPC_TESTING_GUIDE.md)
+4. **开始编写**: 使用 IPC Mock 工具开始测试
 
-### 我要写第一个测试
+### 我要写 IPC 测试 (P2 阶段) 🆕
 
 ```bash
-# 1. 查看测试计划
-open docs/UNIT_TEST_COVERAGE.md
+# 1. 查看 P2 计划
+open docs/testing/P2_PLAN.md
 
-# 2. 选择一个模块 (建议从简单的开始，如GitService)
+# 2. 阅读 IPC 测试指南
+open docs/testing/IPC_TESTING_GUIDE.md
+
 # 3. 创建测试文件
-mkdir -p src/test/main
-touch src/test/main/GitService.test.ts
+mkdir -p src/test/main/ipc
+touch src/test/main/ipc/agentIpc.test.ts
 
-# 4. 参考模板编写测试 (见UNIT_TEST_COVERAGE.md 第3.4节)
+# 4. 使用 IPC Mock 工具
+# 参考 src/test/utils/ipcMock.ts
 
 # 5. 运行测试
 npm test
 
-# 6. 查看覆盖率
+# 6. 类型检查
+npm run type-check
+```
+
+### 我要写服务层测试 (已完成示例)
+
+```bash
+# 1. 查看现有测试作为参考
+open src/test/main/AgentService.test.ts
+open src/test/main/CodexService.test.ts
+
+# 2. 创建测试文件
+mkdir -p src/test/main
+touch src/test/main/MyService.test.ts
+
+# 3. 运行测试
+npm test
+
+# 4. 查看覆盖率
 npm run test:coverage
 ```
 
