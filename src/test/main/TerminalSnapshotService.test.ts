@@ -4,6 +4,12 @@ import path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TerminalSnapshotPayload } from '../../types/terminalSnapshot';
 
+vi.mock('electron', () => ({
+  app: {
+    getPath: vi.fn(() => '/tmp/electron-mock'),
+  },
+}));
+
 describe('TerminalSnapshotService', () => {
   let tempDir: string;
   let service: typeof import('../../main/services/TerminalSnapshotService').terminalSnapshotService;

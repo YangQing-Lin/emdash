@@ -1,7 +1,12 @@
 import Module from 'module';
 import os from 'os';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { IPty } from 'node-pty';
+import type {
+  IPty,
+  IPtyForkOptions,
+  IWindowsPtyForkOptions,
+  IBasePtyForkOptions,
+} from 'node-pty';
 
 type MockRecord = {
   writes: string[];
@@ -9,16 +14,13 @@ type MockRecord = {
   killCount: number;
 };
 
+type SpawnOptionsRecord = (IPtyForkOptions | IWindowsPtyForkOptions) &
+  Required<Pick<IBasePtyForkOptions, 'name' | 'cols' | 'rows' | 'cwd' | 'env'>>;
+
 type SpawnCall = {
   shell: string;
-  args: string[];
-  options: {
-    name: string;
-    cols: number;
-    rows: number;
-    cwd: string;
-    env: NodeJS.ProcessEnv;
-  };
+  args: string[] | string;
+  options: SpawnOptionsRecord;
   proc: IPty;
 };
 
@@ -42,7 +44,7 @@ let resizePty: PtyManagerModule['resizePty'];
 let killPty: PtyManagerModule['killPty'];
 let hasPty: PtyManagerModule['hasPty'];
 let getPty: PtyManagerModule['getPty'];
-let platformSpy: vi.SpyInstance<[], NodeJS.Platform>;
+let platformSpy: ReturnType<typeof vi.spyOn>;
 
 const createNodePtyModule = (): NodePtyModule => ({
   spawn: spawnMock,
@@ -107,12 +109,28 @@ const createMockPty = () => {
 };
 
 function configureSpawnDefault() {
-  spawnMock.mockImplementation((shell: string, args: string[], options: SpawnCall['options']) => {
-    const { proc, record } = createMockPty();
-    ptyRecords.set(proc, record);
-    spawnHistory.push({ shell, args, options, proc });
-    return proc;
-  });
+  spawnMock.mockImplementation(
+    (shell: string, args: string[] | string, options: IPtyForkOptions | IWindowsPtyForkOptions) => {
+      const { proc, record } = createMockPty();
+      ptyRecords.set(proc, record);
+      const normalizedOptions = normalizeSpawnOptions(options);
+      spawnHistory.push({ shell, args, options: normalizedOptions, proc });
+      return proc;
+    }
+  );
+}
+
+function normalizeSpawnOptions(
+  options: IPtyForkOptions | IWindowsPtyForkOptions
+): SpawnOptionsRecord {
+  return {
+    ...options,
+    name: options.name ?? '',
+    cols: options.cols ?? Number.NaN,
+    rows: options.rows ?? Number.NaN,
+    cwd: options.cwd ?? '',
+    env: options.env ?? process.env,
+  };
 }
 
 function resetNodePtyFactory() {

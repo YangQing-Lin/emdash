@@ -101,7 +101,7 @@ function buildMessage(
     conversationId,
     content: overrides.content ?? 'hello world',
     sender: overrides.sender ?? 'user',
-    metadata: overrides.metadata ?? { tokens: 42 },
+    metadata: overrides.metadata ?? JSON.stringify({ tokens: 42 }),
   };
 }
 
