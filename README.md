@@ -1,7 +1,7 @@
 <img width="4856" height="1000" alt="gh_banner" src="https://github.com/user-attachments/assets/7c7c6e83-774a-43f4-8a6f-df10b3ba5751" />
 
 <div align="center" style="margin:24px 0;">
-  
+
 <br />
 
 [![MIT License](https://img.shields.io/badge/License-MIT-555555.svg?labelColor=333333&color=666666)](LICENSE)
