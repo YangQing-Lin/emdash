@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron';
-import { worktreeService, WorktreeInfo } from './WorktreeService';
+import { worktreeService } from './WorktreeService';
+import { serviceFactory } from './ServiceFactory';
 
 export function registerWorktreeIpc(): void {
   // Create a new worktree
@@ -14,7 +15,8 @@ export function registerWorktreeIpc(): void {
       }
     ) => {
       try {
-        const worktree = await worktreeService.createWorktree(
+        const wtService = serviceFactory.getWorktreeService();
+        const worktree = await wtService.createWorktree(
           args.projectPath,
           args.workspaceName,
           args.projectId
@@ -30,7 +32,8 @@ export function registerWorktreeIpc(): void {
   // List worktrees for a project
   ipcMain.handle('worktree:list', async (event, args: { projectPath: string }) => {
     try {
-      const worktrees = await worktreeService.listWorktrees(args.projectPath);
+      const wtService = serviceFactory.getWorktreeService();
+      const worktrees = await wtService.listWorktrees(args.projectPath);
       return { success: true, worktrees };
     } catch (error) {
       console.error('Failed to list worktrees:', error);
@@ -51,7 +54,8 @@ export function registerWorktreeIpc(): void {
       }
     ) => {
       try {
-        await worktreeService.removeWorktree(
+        const wtService = serviceFactory.getWorktreeService();
+        await wtService.removeWorktree(
           args.projectPath,
           args.worktreeId,
           args.worktreePath,
@@ -68,7 +72,8 @@ export function registerWorktreeIpc(): void {
   // Get worktree status
   ipcMain.handle('worktree:status', async (event, args: { worktreePath: string }) => {
     try {
-      const status = await worktreeService.getWorktreeStatus(args.worktreePath);
+      const wtService = serviceFactory.getWorktreeService();
+      const status = await wtService.getWorktreeStatus(args.worktreePath);
       return { success: true, status };
     } catch (error) {
       console.error('Failed to get worktree status:', error);

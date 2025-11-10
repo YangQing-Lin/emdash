@@ -2,12 +2,7 @@ import { ipcMain } from 'electron';
 import { log } from '../lib/logger';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import {
-  getStatus as gitGetStatus,
-  getFileDiff as gitGetFileDiff,
-  stageFile as gitStageFile,
-  revertFile as gitRevertFile,
-} from '../services/GitService';
+import { serviceFactory } from '../services/ServiceFactory';
 
 const execAsync = promisify(exec);
 
@@ -15,7 +10,8 @@ export function registerGitIpc() {
   // Git: Status (moved from Codex IPC)
   ipcMain.handle('git:get-status', async (_, workspacePath: string) => {
     try {
-      const changes = await gitGetStatus(workspacePath);
+      const gitService = serviceFactory.getGitService();
+      const changes = await gitService.getStatus(workspacePath);
       return { success: true, changes };
     } catch (error) {
       return { success: false, error: error as string };
@@ -27,7 +23,8 @@ export function registerGitIpc() {
     'git:get-file-diff',
     async (_, args: { workspacePath: string; filePath: string }) => {
       try {
-        const diff = await gitGetFileDiff(args.workspacePath, args.filePath);
+        const gitService = serviceFactory.getGitService();
+        const diff = await gitService.getFileDiff(args.workspacePath, args.filePath);
         return { success: true, diff };
       } catch (error) {
         return { success: false, error: error as string };
@@ -39,7 +36,8 @@ export function registerGitIpc() {
   ipcMain.handle('git:stage-file', async (_, args: { workspacePath: string; filePath: string }) => {
     try {
       log.info('Staging file:', { workspacePath: args.workspacePath, filePath: args.filePath });
-      await gitStageFile(args.workspacePath, args.filePath);
+      const gitService = serviceFactory.getGitService();
+      await gitService.stageFile(args.workspacePath, args.filePath);
       log.info('File staged successfully:', args.filePath);
       return { success: true };
     } catch (error) {
@@ -54,7 +52,8 @@ export function registerGitIpc() {
     async (_, args: { workspacePath: string; filePath: string }) => {
       try {
         log.info('Reverting file:', { workspacePath: args.workspacePath, filePath: args.filePath });
-        const result = await gitRevertFile(args.workspacePath, args.filePath);
+        const gitService = serviceFactory.getGitService();
+        const result = await gitService.revertFile(args.workspacePath, args.filePath);
         log.info('File operation completed:', { filePath: args.filePath, action: result.action });
         return { success: true, action: result.action };
       } catch (error) {

@@ -1,16 +1,13 @@
-import { ipcMain, WebContents } from 'electron';
-import { startPty, writePty, resizePty, killPty, getPty } from './ptyManager';
+import { ipcMain } from 'electron';
+import { serviceFactory } from './ServiceFactory';
 import { log } from '../lib/logger';
 import { terminalSnapshotService } from './TerminalSnapshotService';
 import type { TerminalSnapshotPayload } from '../types/terminalSnapshot';
 
-const owners = new Map<string, WebContents>();
-const listeners = new Set<string>();
-
 export function registerPtyIpc(): void {
   ipcMain.handle(
     'pty:start',
-    (
+    async (
       event,
       args: {
         id: string;
@@ -22,46 +19,17 @@ export function registerPtyIpc(): void {
       }
     ) => {
       try {
+        const ptyService = serviceFactory.getPtyService();
         const { id, cwd, shell, env, cols, rows } = args;
-        // Reuse existing PTY if present; otherwise create new
-        const existing = getPty(id);
-        const proc = existing ?? startPty({ id, cwd, shell, env, cols, rows });
-        const envKeys = env ? Object.keys(env) : [];
-        const planEnv = env && (env.EMDASH_PLAN_MODE || env.EMDASH_PLAN_FILE) ? true : false;
-        log.debug('pty:start OK', {
+        await ptyService.startPty({
           id,
           cwd,
           shell,
+          env,
           cols,
           rows,
-          reused: !!existing,
-          envKeys,
-          planEnv,
-        });
-        const wc = event.sender;
-        owners.set(id, wc);
-
-        // Attach listeners once per PTY id
-        if (!listeners.has(id)) {
-          proc.onData((data) => {
-            owners.get(id)?.send(`pty:data:${id}`, data);
-          });
-
-          proc.onExit(({ exitCode, signal }) => {
-            owners.get(id)?.send(`pty:exit:${id}`, { exitCode, signal });
-            owners.delete(id);
-            listeners.delete(id);
-          });
-          listeners.add(id);
-        }
-
-        // Signal that PTY is ready so renderer may inject initial prompt safely
-        try {
-          const { BrowserWindow } = require('electron');
-          const windows = BrowserWindow.getAllWindows();
-          windows.forEach((w: any) => w.webContents.send('pty:started', { id }));
-        } catch {}
-
+          owner: event.sender,
+        } as any);
         return { ok: true };
       } catch (err: any) {
         log.error('pty:start FAIL', {
@@ -77,7 +45,8 @@ export function registerPtyIpc(): void {
 
   ipcMain.on('pty:input', (_event, args: { id: string; data: string }) => {
     try {
-      writePty(args.id, args.data);
+      const ptyService = serviceFactory.getPtyService();
+      ptyService.writePty(args.id, args.data);
     } catch (e) {
       log.error('pty:input error', { id: args.id, error: e });
     }
@@ -85,7 +54,8 @@ export function registerPtyIpc(): void {
 
   ipcMain.on('pty:resize', (_event, args: { id: string; cols: number; rows: number }) => {
     try {
-      resizePty(args.id, args.cols, args.rows);
+      const ptyService = serviceFactory.getPtyService();
+      ptyService.resizePty(args.id, args.cols, args.rows);
     } catch (e) {
       log.error('pty:resize error', { id: args.id, cols: args.cols, rows: args.rows, error: e });
     }
@@ -93,9 +63,8 @@ export function registerPtyIpc(): void {
 
   ipcMain.on('pty:kill', (_event, args: { id: string }) => {
     try {
-      killPty(args.id);
-      owners.delete(args.id);
-      listeners.delete(args.id);
+      const ptyService = serviceFactory.getPtyService();
+      ptyService.killPty(args.id);
     } catch (e) {
       log.error('pty:kill error', { id: args.id, error: e });
     }

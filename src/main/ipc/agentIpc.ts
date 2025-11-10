@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import { agentService } from '../services/AgentService';
-import { codexService } from '../services/CodexService';
+import { serviceFactory } from '../services/ServiceFactory';
 
 export function registerAgentIpc() {
   // Installation check
@@ -62,6 +62,7 @@ export function registerAgentIpc() {
   );
 
   // Bridge Codex native events to generic agent events so renderer can listen once
+  const codexService = serviceFactory.getCodexService();
   codexService.on('codex:output', (data: any) => {
     const windows = BrowserWindow.getAllWindows();
     windows.forEach((w) =>

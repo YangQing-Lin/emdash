@@ -1,0 +1,75 @@
+import type { IWorktreeService } from './abstractions/IWorktreeService';
+import type { IPtyService } from './abstractions/IPtyService';
+import type { ICodexService } from './abstractions/ICodexService';
+import type { IGitService } from './abstractions/IGitService';
+import { localWorktreeService } from './local/LocalWorktreeService';
+import { localPtyService } from './local/LocalPtyService';
+import { localCodexService } from './local/LocalCodexService';
+import { localGitService } from './local/LocalGitService';
+
+type ServiceMode = 'local' | 'remote';
+
+/**
+ * ServiceFactory provides a unified interface to access service implementations.
+ * Defaults to 'local' mode, with future support for 'remote' mode.
+ */
+class ServiceFactory {
+  private mode: ServiceMode = 'local';
+
+  /**
+   * Get the current service mode.
+   */
+  getMode(): ServiceMode {
+    return this.mode;
+  }
+
+  /**
+   * Set the service mode (for testing or future remote support).
+   * @param mode 'local' or 'remote'
+   */
+  setMode(mode: ServiceMode): void {
+    this.mode = mode;
+  }
+
+  /**
+   * Get the Worktree service implementation.
+   */
+  getWorktreeService(): IWorktreeService {
+    if (this.mode === 'local') {
+      return localWorktreeService;
+    }
+    throw new Error(`Worktree service not available for mode: ${this.mode}`);
+  }
+
+  /**
+   * Get the PTY service implementation.
+   */
+  getPtyService(): IPtyService {
+    if (this.mode === 'local') {
+      return localPtyService;
+    }
+    throw new Error(`PTY service not available for mode: ${this.mode}`);
+  }
+
+  /**
+   * Get the Codex service implementation.
+   */
+  getCodexService(): ICodexService {
+    if (this.mode === 'local') {
+      return localCodexService;
+    }
+    throw new Error(`Codex service not available for mode: ${this.mode}`);
+  }
+
+  /**
+   * Get the Git service implementation.
+   */
+  getGitService(): IGitService {
+    if (this.mode === 'local') {
+      return localGitService;
+    }
+    throw new Error(`Git service not available for mode: ${this.mode}`);
+  }
+}
+
+export const serviceFactory = new ServiceFactory();
