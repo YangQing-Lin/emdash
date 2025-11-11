@@ -34,6 +34,7 @@ optional_env:
 1. `npm run build` to compile the Electron main and Vite renderer.
 2. Platform-specific installers: `npm run package:mac|linux|win` (artifacts in `release/`).
 3. If native modules misbehave, `npm run rebuild`; use `npm run reset` as a last resort.
+4. The compiled output files are uniformly stored in the `bin/` directory.
 
 **Repo Map**
 - `src/main/` – Electron main process, IPC, database access, CLI orchestration.
