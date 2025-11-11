@@ -107,6 +107,19 @@ Emdash allows you to pass engineering tickets straight from your issue tracker t
 
 Contributions welcome! See the [Contributing Guide](CONTRIBUTING.md) to get started, and join our [Discord](https://discord.gg/UmTn6Nb7) to discuss.
 
+# Remote PTY Mode
+
+Emdash launches in local mode by default. To proxy PTY sessions through the remote Golang server, set the service mode and (optionally) override the server endpoints before starting the app:
+
+```bash
+export EMDASH_SERVICE_MODE=remote
+export EMDASH_REMOTE_SERVER=wss://localhost:8080    # defaults to ws://localhost:8080
+export EMDASH_GRPC_SERVER=localhost:50051          # defaults to localhost:50051
+npm run dev
+```
+
+Unset `EMDASH_SERVICE_MODE` (or set it back to `local`) to restore the original on-device PTY behavior.
+
 # FAQ
 
 <details>

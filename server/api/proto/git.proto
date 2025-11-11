@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package emdash.git;
+
+import "google/protobuf/empty.proto";
+
+option go_package = "github.com/emdashhq/emdash-server/api/proto/git";
+
+message GitChange {
+  string path = 1;
+  string status = 2;
+  int32 additions = 3;
+  int32 deletions = 4;
+  bool is_staged = 5;
+}
+
+enum DiffType {
+  DIFF_TYPE_UNSPECIFIED = 0;
+  DIFF_TYPE_CONTEXT = 1;
+  DIFF_TYPE_ADD = 2;
+  DIFF_TYPE_DEL = 3;
+}
+
+message FileDiffLine {
+  optional string left = 1;
+  optional string right = 2;
+  DiffType type = 3;
+}
+
+enum RevertAction {
+  REVERT_ACTION_UNSPECIFIED = 0;
+  REVERT_ACTION_UNSTAGED = 1;
+  REVERT_ACTION_REVERTED = 2;
+}
+
+message GetStatusRequest {
+  string workspace_path = 1;
+}
+
+message GetStatusResponse {
+  repeated GitChange changes = 1;
+}
+
+message StageFileRequest {
+  string workspace_path = 1;
+  string file_path = 2;
+}
+
+message RevertFileRequest {
+  string workspace_path = 1;
+  string file_path = 2;
+}
+
+message RevertFileResponse {
+  RevertAction action = 1;
+}
+
+message GetFileDiffRequest {
+  string workspace_path = 1;
+  string file_path = 2;
+}
+
+message GetFileDiffResponse {
+  repeated FileDiffLine lines = 1;
+}
+
+service GitService {
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+  rpc StageFile(StageFileRequest) returns (google.protobuf.Empty);
+  rpc RevertFile(RevertFileRequest) returns (RevertFileResponse);
+  rpc GetFileDiff(GetFileDiffRequest) returns (GetFileDiffResponse);
+}

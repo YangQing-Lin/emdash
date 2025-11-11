@@ -4,6 +4,7 @@ import type { ICodexService } from './abstractions/ICodexService';
 import type { IGitService } from './abstractions/IGitService';
 import { localWorktreeService } from './local/LocalWorktreeService';
 import { localPtyService } from './local/LocalPtyService';
+import { remotePtyService } from './remote/RemotePtyService';
 import { localCodexService } from './local/LocalCodexService';
 import { localGitService } from './local/LocalGitService';
 
@@ -14,7 +15,19 @@ type ServiceMode = 'local' | 'remote';
  * Defaults to 'local' mode, with future support for 'remote' mode.
  */
 class ServiceFactory {
-  private mode: ServiceMode = 'local';
+  private mode: ServiceMode;
+
+  constructor() {
+    this.mode = this.resolveInitialMode();
+  }
+
+  private resolveInitialMode(): ServiceMode {
+    const rawMode = (process.env.EMDASH_SERVICE_MODE ?? process.env.EMDASH_MODE ?? '').toLowerCase();
+    if (rawMode === 'remote' || rawMode === 'local') {
+      return rawMode;
+    }
+    return 'local';
+  }
 
   /**
    * Get the current service mode.
@@ -47,6 +60,9 @@ class ServiceFactory {
   getPtyService(): IPtyService {
     if (this.mode === 'local') {
       return localPtyService;
+    }
+    if (this.mode === 'remote') {
+      return remotePtyService;
     }
     throw new Error(`PTY service not available for mode: ${this.mode}`);
   }

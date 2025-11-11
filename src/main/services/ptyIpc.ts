@@ -5,6 +5,7 @@ import { terminalSnapshotService } from './TerminalSnapshotService';
 import type { TerminalSnapshotPayload } from '../types/terminalSnapshot';
 
 export function registerPtyIpc(): void {
+  log.info(`Using PTY service in ${serviceFactory.getMode()} mode`);
   ipcMain.handle(
     'pty:start',
     async (

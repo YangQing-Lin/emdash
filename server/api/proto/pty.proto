@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package emdash.pty;
+
+import "google/protobuf/empty.proto";
+
+option go_package = "github.com/emdashhq/emdash-server/api/proto/pty";
+
+message PtyStartRequest {
+  string id = 1;
+  string cwd = 2;
+  string shell = 3;
+  map<string, string> env = 4;
+  uint32 cols = 5;
+  uint32 rows = 6;
+}
+
+message PtyStartResponse {
+  string id = 1;
+}
+
+message PtyStreamRequest {
+  string id = 1;
+}
+
+message PtyDataEvent {
+  string id = 1;
+  string data = 2;
+}
+
+message PtyExitEvent {
+  string id = 1;
+  int32 exit_code = 2;
+  string signal = 3;
+}
+
+message PtyStreamEvent {
+  string id = 1;
+  oneof event {
+    PtyDataEvent data = 2;
+    PtyExitEvent exit = 3;
+  }
+}
+
+message PtyWriteRequest {
+  string id = 1;
+  string data = 2;
+}
+
+message PtyResizeRequest {
+  string id = 1;
+  uint32 cols = 2;
+  uint32 rows = 3;
+}
+
+message PtyKillRequest {
+  string id = 1;
+}
+
+service PtyService {
+  rpc StartPty(PtyStartRequest) returns (PtyStartResponse);
+  rpc StreamPtyData(PtyStreamRequest) returns (stream PtyStreamEvent);
+  rpc WritePty(PtyWriteRequest) returns (google.protobuf.Empty);
+  rpc ResizePty(PtyResizeRequest) returns (google.protobuf.Empty);
+  rpc KillPty(PtyKillRequest) returns (google.protobuf.Empty);
+}

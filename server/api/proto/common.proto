@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package emdash.common;
+
+option go_package = "github.com/emdashhq/emdash-server/api/proto/common";
+
+enum WorktreeStatus {
+  WORKTREE_STATUS_UNSPECIFIED = 0;
+  WORKTREE_STATUS_ACTIVE = 1;
+  WORKTREE_STATUS_PAUSED = 2;
+  WORKTREE_STATUS_COMPLETED = 3;
+  WORKTREE_STATUS_ERROR = 4;
+}
+
+message WorktreeInfo {
+  string id = 1;
+  string name = 2;
+  string branch = 3;
+  string path = 4;
+  string project_id = 5;
+  WorktreeStatus status = 6;
+  string created_at = 7;
+  optional string last_activity = 8;
+}
+
+message WorktreeStatusDetails {
+  bool has_changes = 1;
+  repeated string staged_files = 2;
+  repeated string unstaged_files = 3;
+  repeated string untracked_files = 4;
+}

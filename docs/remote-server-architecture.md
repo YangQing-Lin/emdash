@@ -905,8 +905,9 @@ PTY_BUFFER_MS=50
 
 ```bash
 # .env (optional, for dev)
-EMDASH_MODE=remote
-EMDASH_SERVER_URL=wss://localhost:8080
+EMDASH_SERVICE_MODE=remote
+EMDASH_REMOTE_SERVER=wss://localhost:8080
+EMDASH_GRPC_SERVER=localhost:50051
 EMDASH_SERVER_TOKEN=your-token
 ```
 

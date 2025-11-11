@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package emdash.worktree;
+
+import "google/protobuf/empty.proto";
+import "api/proto/common.proto";
+
+option go_package = "github.com/emdashhq/emdash-server/api/proto/worktree";
+
+message CreateWorktreeRequest {
+  string project_path = 1;
+  string workspace_name = 2;
+  string project_id = 3;
+}
+
+message CreateWorktreeResponse {
+  emdash.common.WorktreeInfo worktree = 1;
+}
+
+message ListWorktreesRequest {
+  string project_path = 1;
+}
+
+message ListWorktreesResponse {
+  repeated emdash.common.WorktreeInfo worktrees = 1;
+}
+
+message RemoveWorktreeRequest {
+  string project_path = 1;
+  string worktree_id = 2;
+  optional string worktree_path = 3;
+  optional string branch = 4;
+}
+
+message GetWorktreeStatusRequest {
+  string worktree_path = 1;
+}
+
+message GetWorktreeStatusResponse {
+  emdash.common.WorktreeStatusDetails status = 1;
+}
+
+message CreateWorktreeFromBranchRequest {
+  string project_path = 1;
+  string workspace_name = 2;
+  string branch_name = 3;
+  string project_id = 4;
+  optional string worktree_path = 5;
+}
+
+service WorktreeService {
+  rpc CreateWorktree(CreateWorktreeRequest) returns (CreateWorktreeResponse);
+  rpc ListWorktrees(ListWorktreesRequest) returns (ListWorktreesResponse);
+  rpc RemoveWorktree(RemoveWorktreeRequest) returns (google.protobuf.Empty);
+  rpc GetWorktreeStatus(GetWorktreeStatusRequest) returns (GetWorktreeStatusResponse);
+  rpc CreateWorktreeFromBranch(CreateWorktreeFromBranchRequest) returns (CreateWorktreeResponse);
+}
