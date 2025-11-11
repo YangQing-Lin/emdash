@@ -1,7 +1,9 @@
 package websocket
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -27,6 +29,8 @@ type Client struct {
 // PtyInputWriter accepts input bytes for a PTY session.
 type PtyInputWriter interface {
 	WritePty(id string, data []byte) error
+	ResizePty(id string, cols, rows uint32) error
+	KillPty(id string) error
 }
 
 // NewClient wires a websocket connection to the hub.
@@ -141,6 +145,13 @@ func (c *Client) logReadError(err error) {
 	c.hub.logger.Info("websocket client disconnected", zap.String("client_id", c.id), zap.Error(err))
 }
 
+type inboundMessage struct {
+	Type string `json:"type"`
+	Data string `json:"data"`
+	Cols uint32 `json:"cols"`
+	Rows uint32 `json:"rows"`
+}
+
 func (c *Client) forwardToPty(message []byte) error {
 	if c.ptyWriter == nil {
 		return errors.New("no PTY writer configured")
@@ -148,5 +159,21 @@ func (c *Client) forwardToPty(message []byte) error {
 	if len(message) == 0 {
 		return nil
 	}
-	return c.ptyWriter.WritePty(c.id, message)
+
+	var payload inboundMessage
+	if err := json.Unmarshal(message, &payload); err != nil || payload.Type == "" {
+		// Fallback to treating the payload as raw PTY input for backward compatibility.
+		return c.ptyWriter.WritePty(c.id, message)
+	}
+
+	switch payload.Type {
+	case "input":
+		return c.ptyWriter.WritePty(c.id, []byte(payload.Data))
+	case "resize":
+		return c.ptyWriter.ResizePty(c.id, payload.Cols, payload.Rows)
+	case "kill":
+		return c.ptyWriter.KillPty(c.id)
+	default:
+		return fmt.Errorf("unknown websocket payload type: %s", payload.Type)
+	}
 }
