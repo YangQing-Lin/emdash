@@ -1,0 +1,16 @@
+# Build artifacts
+bin/
+*.exe
+*.exe~
+*.log
+*.out
+coverage.out
+
+# Module checksum (regenerate as needed)
+go.sum
+
+# IDE/editor metadata
+.vscode/
+.idea/
+*.swp
+.DS_Store
