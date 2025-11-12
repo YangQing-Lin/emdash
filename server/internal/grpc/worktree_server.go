@@ -16,6 +16,7 @@ import (
 
 	"github.com/emdashhq/emdash-server/api/proto/common"
 	"github.com/emdashhq/emdash-server/api/proto/worktree"
+	auditlogger "github.com/emdashhq/emdash-server/internal/logger"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -27,7 +28,8 @@ var slugInvalidChars = regexp.MustCompile(`[^a-z0-9]+`)
 // WorktreeServer implements worktree.WorktreeServiceServer.
 type WorktreeServer struct {
 	worktree.UnimplementedWorktreeServiceServer
-	logger *zap.Logger
+	logger      *zap.Logger
+	auditLogger *auditlogger.AuditLogger
 }
 
 // NewWorktreeServer wires a zap logger into the WorktreeService implementation.
@@ -35,11 +37,24 @@ func NewWorktreeServer(logger *zap.Logger) *WorktreeServer {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
-	return &WorktreeServer{logger: logger.Named("grpc-worktree-server")}
+	return &WorktreeServer{
+		logger:      logger.Named("grpc-worktree-server"),
+		auditLogger: auditlogger.NewAuditLogger(logger),
+	}
 }
 
 // CreateWorktree shells out to git worktree add -b <branch> <path>.
-func (s *WorktreeServer) CreateWorktree(ctx context.Context, req *worktree.CreateWorktreeRequest) (*worktree.CreateWorktreeResponse, error) {
+func (s *WorktreeServer) CreateWorktree(ctx context.Context, req *worktree.CreateWorktreeRequest) (_ *worktree.CreateWorktreeResponse, err error) {
+	resource := ""
+	metadata := map[string]any{
+		"project_id":     req.GetProjectId(),
+		"workspace_name": strings.TrimSpace(req.GetWorkspaceName()),
+	}
+	defer func() {
+		if s.auditLogger != nil {
+			s.auditLogger.LogAudit(ctx, "worktree.create", resource, err == nil, metadata)
+		}
+	}()
 	projectPath, err := s.resolveProjectPath(req.GetProjectPath())
 	if err != nil {
 		return nil, err
@@ -69,12 +84,26 @@ func (s *WorktreeServer) CreateWorktree(ctx context.Context, req *worktree.Creat
 		return nil, err
 	}
 
+	resource = worktreePath
+	metadata["branch"] = branchName
 	s.logger.Info("worktree created", zap.String("path", worktreePath), zap.String("branch", branchName))
 	return &worktree.CreateWorktreeResponse{Worktree: info}, nil
 }
 
 // CreateWorktreeFromBranch adds a worktree from an existing or remote branch.
-func (s *WorktreeServer) CreateWorktreeFromBranch(ctx context.Context, req *worktree.CreateWorktreeFromBranchRequest) (*worktree.CreateWorktreeResponse, error) {
+func (s *WorktreeServer) CreateWorktreeFromBranch(ctx context.Context, req *worktree.CreateWorktreeFromBranchRequest) (_ *worktree.CreateWorktreeResponse, err error) {
+	resource := ""
+	metadata := map[string]any{
+		"project_id":     req.GetProjectId(),
+		"workspace_name": strings.TrimSpace(req.GetWorkspaceName()),
+		"branch_name":    strings.TrimSpace(req.GetBranchName()),
+		"requested_path": strings.TrimSpace(req.GetWorktreePath()),
+	}
+	defer func() {
+		if s.auditLogger != nil {
+			s.auditLogger.LogAudit(ctx, "worktree.create", resource, err == nil, metadata)
+		}
+	}()
 	projectPath, err := s.resolveProjectPath(req.GetProjectPath())
 	if err != nil {
 		return nil, err
@@ -112,6 +141,8 @@ func (s *WorktreeServer) CreateWorktreeFromBranch(ctx context.Context, req *work
 	if err != nil {
 		return nil, err
 	}
+	resource = worktreePath
+	metadata["branch"] = branchName
 	s.logger.Info("worktree created from branch", zap.String("path", worktreePath), zap.String("branch", branchName))
 	return &worktree.CreateWorktreeResponse{Worktree: info}, nil
 }
@@ -151,7 +182,18 @@ func (s *WorktreeServer) ListWorktrees(ctx context.Context, req *worktree.ListWo
 }
 
 // RemoveWorktree removes a git worktree, forcing removal when dirty.
-func (s *WorktreeServer) RemoveWorktree(ctx context.Context, req *worktree.RemoveWorktreeRequest) (*emptypb.Empty, error) {
+func (s *WorktreeServer) RemoveWorktree(ctx context.Context, req *worktree.RemoveWorktreeRequest) (_ *emptypb.Empty, err error) {
+	resource := ""
+	metadata := map[string]any{
+		"project_path": strings.TrimSpace(req.GetProjectPath()),
+		"worktree_id": strings.TrimSpace(req.GetWorktreeId()),
+		"worktree":    strings.TrimSpace(req.GetWorktreePath()),
+	}
+	defer func() {
+		if s.auditLogger != nil {
+			s.auditLogger.LogAudit(ctx, "worktree.remove", resource, err == nil, metadata)
+		}
+	}()
 	projectPath, err := s.resolveProjectPath(req.GetProjectPath())
 	if err != nil {
 		return nil, err
@@ -160,6 +202,7 @@ func (s *WorktreeServer) RemoveWorktree(ctx context.Context, req *worktree.Remov
 	if err != nil {
 		return nil, err
 	}
+	resource = targetPath
 
 	if _, err := s.execGitCommand(projectPath, "worktree", "remove", targetPath); err != nil {
 		if strings.Contains(err.Error(), "working tree") || strings.Contains(err.Error(), "local modifications") {

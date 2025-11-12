@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/emdashhq/emdash-server/api/proto/pty"
+	auditlogger "github.com/emdashhq/emdash-server/internal/logger"
 	"github.com/emdashhq/emdash-server/internal/service"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -16,8 +17,9 @@ import (
 // PtyServer implements the full lifecycle for PTY sessions exposed via gRPC.
 type PtyServer struct {
 	pty.UnimplementedPtyServiceServer
-	logger     *zap.Logger
-	ptyManager *service.PtyManager
+	logger      *zap.Logger
+	ptyManager  *service.PtyManager
+	auditLogger *auditlogger.AuditLogger
 }
 
 // NewPtyServer wires a zap logger into the PtyService.
@@ -26,13 +28,14 @@ func NewPtyServer(logger *zap.Logger, manager *service.PtyManager) *PtyServer {
 		logger = zap.NewNop()
 	}
 	return &PtyServer{
-		logger:     logger.Named("grpc-pty-server"),
-		ptyManager: manager,
+		logger:      logger.Named("grpc-pty-server"),
+		ptyManager:  manager,
+		auditLogger: auditlogger.NewAuditLogger(logger),
 	}
 }
 
 // StartPty creates a new session and returns the ID once ready.
-func (s *PtyServer) StartPty(ctx context.Context, req *pty.PtyStartRequest) (*pty.PtyStartResponse, error) {
+func (s *PtyServer) StartPty(ctx context.Context, req *pty.PtyStartRequest) (_ *pty.PtyStartResponse, err error) {
 	if err := s.ensureManager(); err != nil {
 		return nil, err
 	}
@@ -41,6 +44,19 @@ func (s *PtyServer) StartPty(ctx context.Context, req *pty.PtyStartRequest) (*pt
 	if id == "" {
 		return nil, status.Error(codes.InvalidArgument, "pty id is required")
 	}
+	metadata := map[string]any{
+		"pty_id":   id,
+		"cwd":      req.GetCwd(),
+		"shell":    req.GetShell(),
+		"cols":     req.GetCols(),
+		"rows":     req.GetRows(),
+		"env_keys": len(req.GetEnv()),
+	}
+	defer func() {
+		if s.auditLogger != nil {
+			s.auditLogger.LogAudit(ctx, "pty.start", id, err == nil, metadata)
+		}
+	}()
 
 	env := make(map[string]string, len(req.GetEnv()))
 	for k, v := range req.GetEnv() {
@@ -149,13 +165,20 @@ func (s *PtyServer) ResizePty(ctx context.Context, req *pty.PtyResizeRequest) (*
 }
 
 // KillPty terminates the running PTY session.
-func (s *PtyServer) KillPty(ctx context.Context, req *pty.PtyKillRequest) (*emptypb.Empty, error) {
+func (s *PtyServer) KillPty(ctx context.Context, req *pty.PtyKillRequest) (_ *emptypb.Empty, err error) {
 	if err := s.ensureManager(); err != nil {
 		return nil, err
 	}
 	if req.GetId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "pty id is required")
 	}
+	id := req.GetId()
+	metadata := map[string]any{"pty_id": id}
+	defer func() {
+		if s.auditLogger != nil {
+			s.auditLogger.LogAudit(ctx, "pty.kill", id, err == nil, metadata)
+		}
+	}()
 	if err := s.ptyManager.KillPty(req.GetId()); err != nil {
 		return nil, s.convertError(err)
 	}

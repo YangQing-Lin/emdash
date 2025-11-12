@@ -63,3 +63,4 @@ worktrees/
 
 /container.md
 .npmrc
+server/emdash-server

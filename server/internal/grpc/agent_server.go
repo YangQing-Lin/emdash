@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	agentpb "github.com/emdashhq/emdash-server/api/proto/agent"
+	auditlogger "github.com/emdashhq/emdash-server/internal/logger"
 	"github.com/emdashhq/emdash-server/internal/service"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -17,8 +18,9 @@ import (
 // AgentServer wraps the AgentManager with gRPC adapters.
 type AgentServer struct {
 	agentpb.UnimplementedAgentServiceServer
-	logger  *zap.Logger
-	manager *service.AgentManager
+	logger      *zap.Logger
+	manager     *service.AgentManager
+	auditLogger *auditlogger.AuditLogger
 }
 
 // NewAgentServer wires dependencies for the AgentService.
@@ -27,13 +29,27 @@ func NewAgentServer(logger *zap.Logger, manager *service.AgentManager) *AgentSer
 		logger = zap.NewNop()
 	}
 	return &AgentServer{
-		logger:  logger.Named("grpc-agent-server"),
-		manager: manager,
+		logger:      logger.Named("grpc-agent-server"),
+		manager:     manager,
+		auditLogger: auditlogger.NewAuditLogger(logger),
 	}
 }
 
 // StartAgent launches an agent CLI process for the workspace.
-func (s *AgentServer) StartAgent(ctx context.Context, req *agentpb.StartAgentRequest) (*agentpb.StartAgentResponse, error) {
+func (s *AgentServer) StartAgent(ctx context.Context, req *agentpb.StartAgentRequest) (_ *agentpb.StartAgentResponse, err error) {
+	resource := strings.TrimSpace(req.GetWorkspaceId())
+	metadata := map[string]any{
+		"workspace_id": resource,
+		"provider":     strings.TrimSpace(req.GetProvider()),
+		"cwd":          strings.TrimSpace(req.GetCwd()),
+		"arg_count":    len(req.GetArgs()),
+		"env_keys":     len(req.GetEnv()),
+	}
+	defer func() {
+		if s.auditLogger != nil {
+			s.auditLogger.LogAudit(ctx, "agent.start", resource, err == nil, metadata)
+		}
+	}()
 	if err := s.ensureManager(); err != nil {
 		return nil, err
 	}
@@ -78,7 +94,16 @@ func (s *AgentServer) SendMessage(ctx context.Context, req *agentpb.SendMessageR
 }
 
 // StopAgent terminates the running agent process.
-func (s *AgentServer) StopAgent(ctx context.Context, req *agentpb.StopAgentRequest) (*emptypb.Empty, error) {
+func (s *AgentServer) StopAgent(ctx context.Context, req *agentpb.StopAgentRequest) (_ *emptypb.Empty, err error) {
+	resource := strings.TrimSpace(req.GetWorkspaceId())
+	metadata := map[string]any{
+		"workspace_id": resource,
+	}
+	defer func() {
+		if s.auditLogger != nil {
+			s.auditLogger.LogAudit(ctx, "agent.stop", resource, err == nil, metadata)
+		}
+	}()
 	if err := s.ensureManager(); err != nil {
 		return nil, err
 	}

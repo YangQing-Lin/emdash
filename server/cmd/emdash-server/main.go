@@ -5,7 +5,9 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -14,18 +16,28 @@ import (
 	gitpb "github.com/emdashhq/emdash-server/api/proto/git"
 	ptypb "github.com/emdashhq/emdash-server/api/proto/pty"
 	worktreepb "github.com/emdashhq/emdash-server/api/proto/worktree"
+	"github.com/emdashhq/emdash-server/internal/auth"
 	emdgrpc "github.com/emdashhq/emdash-server/internal/grpc"
+	auditlogger "github.com/emdashhq/emdash-server/internal/logger"
 	"github.com/emdashhq/emdash-server/internal/service"
 	ws "github.com/emdashhq/emdash-server/internal/websocket"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 const (
-	grpcAddress = ":50051"
-	httpAddress = ":8080"
+	grpcAddress            = ":50051"
+	httpAddress            = ":8080"
+	defaultAuthSecret      = "dev-secret-change-in-production"
+	authSecretEnvField     = "AUTH_SECRET"
+	tlsEnabledEnvField     = "TLS_ENABLED"
+	tlsCertFileEnvField    = "TLS_CERT_FILE"
+	tlsKeyFileEnvField     = "TLS_KEY_FILE"
+	defaultTLSCertFilePath = "certs/server.crt"
+	defaultTLSKeyFilePath  = "certs/server.key"
 )
 
 func main() {
@@ -39,6 +51,38 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	auditLogger := auditlogger.NewAuditLogger(logger)
+	auth.SetAuditLogger(auditLogger)
+
+	authSecret := os.Getenv(authSecretEnvField)
+	if authSecret == "" {
+		authSecret = defaultAuthSecret
+	}
+	logger.Info("auth secret configured", zap.Bool("using_default", authSecret == defaultAuthSecret))
+
+	tlsEnabled := false
+	if rawTLSEnv := os.Getenv(tlsEnabledEnvField); rawTLSEnv != "" {
+		parsed, parseErr := strconv.ParseBool(rawTLSEnv)
+		if parseErr != nil {
+			logger.Warn("invalid TLS_ENABLED value; defaulting to false", zap.String("value", rawTLSEnv), zap.Error(parseErr))
+		} else {
+			tlsEnabled = parsed
+		}
+	}
+	certFile := os.Getenv(tlsCertFileEnvField)
+	if certFile == "" {
+		certFile = defaultTLSCertFilePath
+	}
+	keyFile := os.Getenv(tlsKeyFileEnvField)
+	if keyFile == "" {
+		keyFile = defaultTLSKeyFilePath
+	}
+	if tlsEnabled {
+		logger.Info("TLS enabled", zap.String("cert_file", certFile), zap.String("key_file", keyFile))
+	} else {
+		logger.Info("TLS disabled; listeners will use plaintext transports")
+	}
 
 	listener, err := net.Listen("tcp", grpcAddress)
 	if err != nil {
@@ -56,21 +100,32 @@ func main() {
 	ptyManager := service.NewPtyManager(logger, hub)
 	agentManager := service.NewAgentManager(logger, hub)
 
-	grpcServer := grpc.NewServer()
+	grpcServerOptions := []grpc.ServerOption{
+		grpc.UnaryInterceptor(auth.AuthInterceptor(authSecret)),
+	}
+	if tlsEnabled {
+		creds, tlsErr := credentials.NewServerTLSFromFile(certFile, keyFile)
+		if tlsErr != nil {
+			logger.Fatal("failed to load TLS credentials", zap.String("cert_file", certFile), zap.String("key_file", keyFile), zap.Error(tlsErr))
+		}
+		grpcServerOptions = append(grpcServerOptions, grpc.Creds(creds))
+	}
+
+	grpcServer := grpc.NewServer(grpcServerOptions...)
 	worktreepb.RegisterWorktreeServiceServer(grpcServer, emdgrpc.NewWorktreeServer(logger))
 	gitpb.RegisterGitServiceServer(grpcServer, emdgrpc.NewGitServer(logger))
 	ptypb.RegisterPtyServiceServer(grpcServer, emdgrpc.NewPtyServer(logger, ptyManager))
 	agentpb.RegisterAgentServiceServer(grpcServer, emdgrpc.NewAgentServer(logger, agentManager))
 
 	go func() {
-		logger.Info("gRPC server listening on :50051", zap.String("addr", grpcAddress))
+		logger.Info("gRPC server listening", zap.String("addr", grpcAddress), zap.Bool("tls_enabled", tlsEnabled))
 		if serveErr := grpcServer.Serve(listener); serveErr != nil && !errors.Is(serveErr, grpc.ErrServerStopped) {
 			logger.Error("gRPC server stopped unexpectedly", zap.Error(serveErr))
 		}
 	}()
 
 	httpMux := http.NewServeMux()
-	httpMux.Handle("/ws/pty", ws.NewHandler(hub, logger, ptyManager))
+	httpMux.Handle("/ws/pty", ws.NewHandler(hub, logger, ptyManager, authSecret))
 
 	httpServer := &http.Server{
 		Addr:    httpAddress,
@@ -78,9 +133,15 @@ func main() {
 	}
 
 	go func() {
-		logger.Info("WebSocket server listening on :8080", zap.String("addr", httpAddress))
-		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("websocket server stopped unexpectedly", zap.Error(err))
+		logger.Info("WebSocket server listening", zap.String("addr", httpAddress), zap.Bool("tls_enabled", tlsEnabled))
+		var serveErr error
+		if tlsEnabled {
+			serveErr = httpServer.ListenAndServeTLS(certFile, keyFile)
+		} else {
+			serveErr = httpServer.ListenAndServe()
+		}
+		if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			logger.Error("websocket server stopped unexpectedly", zap.Error(serveErr))
 		}
 	}()
 

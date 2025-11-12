@@ -6,6 +6,7 @@ toolchain go1.24.10
 
 require (
 	github.com/creack/pty v1.1.24
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/gorilla/websocket v1.5.3
 	go.uber.org/zap v1.27.0
 	google.golang.org/grpc v1.76.0
