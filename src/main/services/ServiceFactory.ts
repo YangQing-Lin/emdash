@@ -10,32 +10,41 @@ import { localGitService } from './local/LocalGitService';
 import { remoteCodexService } from './remote/RemoteCodexService';
 import { remoteWorktreeService } from './remote/RemoteWorktreeService';
 
-type ServiceMode = 'local' | 'remote';
+export type ServiceMode = 'local' | 'remote';
 
 /**
- * ServiceFactory provides a unified interface to access service implementations.
- * Defaults to 'local' mode, with future support for 'remote' mode.
+ * ServiceFactory - 根据项目模式提供对应的服务实例。
+ *
+ * 当前实现等同于占位实现：默认返回 local 服务，但保留 remote
+ * 模式及 remoteServerId 的入口，以方便未来对接 RemoteWorktreeService、
+ * RemoteGitService 等远程能力。
  */
-class ServiceFactory {
+export class ServiceFactory {
   private mode: ServiceMode;
+  private remoteServerId: string | null;
 
-  constructor() {
-    this.mode = this.resolveInitialMode();
+  constructor(mode: ServiceMode = 'local', remoteServerId: string | null = null) {
+    this.mode = this.resolveInitialMode(mode);
+    this.remoteServerId = remoteServerId ?? process.env.EMDASH_REMOTE_SERVER_ID ?? null;
   }
 
-  private resolveInitialMode(): ServiceMode {
+  private resolveInitialMode(fallback: ServiceMode): ServiceMode {
     const rawMode = (process.env.EMDASH_SERVICE_MODE ?? process.env.EMDASH_MODE ?? '').toLowerCase();
     if (rawMode === 'remote' || rawMode === 'local') {
       return rawMode;
     }
-    return 'local';
+    return fallback;
+  }
+
+  getMode(): ServiceMode {
+    return this.mode;
   }
 
   /**
-   * Get the current service mode.
+   * 占位 getter，后续 remote 模式下会根据 remoteServerId 派发远程服务。
    */
-  getMode(): ServiceMode {
-    return this.mode;
+  getRemoteServerId(): string | null {
+    return this.remoteServerId;
   }
 
   /**
@@ -96,4 +105,12 @@ class ServiceFactory {
   }
 }
 
-export const serviceFactory = new ServiceFactory();
+// 工厂实例创建辅助函数（占位）
+export function createServiceFactory(
+  mode: ServiceMode = 'local',
+  remoteServerId: string | null = null
+): ServiceFactory {
+  return new ServiceFactory(mode, remoteServerId);
+}
+
+export const serviceFactory = createServiceFactory();

@@ -176,6 +176,8 @@ interface Project {
     repository: string;
     connected: boolean;
   };
+  mode?: 'local' | 'remote';
+  remoteServerId?: string | null;
   workspaces?: Workspace[];
 }
 
@@ -647,6 +649,8 @@ const AppContent: React.FC = () => {
               remote: gitInfo.remote || undefined,
               branch: gitInfo.branch || undefined,
             },
+            mode: 'local', // 默认本地模式
+            remoteServerId: null,
             workspaces: [],
           };
 

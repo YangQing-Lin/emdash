@@ -27,6 +27,8 @@ export interface Project {
     repository: string;
     connected: boolean;
   };
+  mode?: 'local' | 'remote'; // 默认 'local'
+  remoteServerId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -108,6 +110,8 @@ export class DatabaseService {
     const gitBranch = project.gitInfo.branch ?? null;
     const githubRepository = project.githubInfo?.repository ?? null;
     const githubConnected = project.githubInfo?.connected ? 1 : 0;
+    const mode = project.mode ?? 'local';
+    const remoteServerId = project.remoteServerId ?? null;
 
     await db
       .insert(projectsTable)
@@ -119,6 +123,8 @@ export class DatabaseService {
         gitBranch,
         githubRepository,
         githubConnected,
+        mode,
+        remoteServerId,
         updatedAt: sql`CURRENT_TIMESTAMP`,
       })
       .onConflictDoUpdate({
@@ -129,6 +135,8 @@ export class DatabaseService {
           gitBranch,
           githubRepository,
           githubConnected,
+          mode,
+          remoteServerId,
           updatedAt: sql`CURRENT_TIMESTAMP`,
         },
       });
@@ -351,6 +359,8 @@ export class DatabaseService {
             connected: !!row.githubConnected,
           }
         : undefined,
+      mode: (row.mode as 'local' | 'remote') ?? 'local',
+      remoteServerId: row.remoteServerId ?? null,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
