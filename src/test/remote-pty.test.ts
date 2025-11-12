@@ -1,6 +1,7 @@
 import { AddressInfo } from 'node:net';
+import type { IncomingMessage } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, type RawData } from 'ws';
 import type WebSocket from 'ws';
 import type { WebContents } from 'electron';
 import { RemotePtyService } from '../main/services/remote/RemotePtyService';
@@ -33,12 +34,12 @@ class TestWebSocketServer {
 
   constructor() {
     this.server = new WebSocketServer({ port: 0 });
-    this.server.on('connection', (socket, request) => {
+    this.server.on('connection', (socket: WebSocket, request: IncomingMessage) => {
       const url = new URL(request.url ?? '', 'http://localhost');
       const id = url.searchParams.get('id') ?? '';
       this.connections.set(id, socket);
 
-      socket.on('message', (data) => {
+      socket.on('message', (data: RawData) => {
         try {
           const payload = JSON.parse(data.toString());
           this.messages.push({ id, payload });

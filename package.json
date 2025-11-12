@@ -43,8 +43,8 @@
   "devDependencies": {
     "@electron/rebuild": "^4.0.1",
     "@esbuild/linux-x64": "^0.27.0",
-    "@grpc/grpc-js": "^1.10.6",
-    "@grpc/proto-loader": "^0.7.13",
+    "@grpc/grpc-js": "^1.14.1",
+    "@grpc/proto-loader": "^0.7.15",
     "@rollup/rollup-linux-x64-gnu": "^4.53.2",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.45",

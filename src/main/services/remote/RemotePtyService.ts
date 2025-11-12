@@ -158,9 +158,9 @@ export class RemotePtyService implements IPtyService {
   }
 
   private attachSocketHandlers(id: string, socket: WebSocket): void {
-    socket.on('message', (data) => this.handleMessage(id, data));
-    socket.on('close', (code, reason) => this.handleClose(id, code, reason));
-    socket.on('error', (error) => {
+    socket.on('message', (data: RawData) => this.handleMessage(id, data));
+    socket.on('close', (code: number, reason: Buffer) => this.handleClose(id, code, reason));
+    socket.on('error', (error: Error) => {
       this.logger.error('RemotePtyService:socketError', {
         id,
         error: error instanceof Error ? error.message : String(error),
