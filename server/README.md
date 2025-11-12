@@ -9,6 +9,27 @@ A production-ready Go service that powers the remote capabilities of the Emdash 
 
 Detailed usage guides: [`docs/security.md`](docs/security.md) · [`docs/api-authentication.md`](docs/api-authentication.md)
 
+## 文档
+
+全面了解、部署和使用 Emdash Server 的指南：
+
+### 核心文档
+- **[架构指南](docs/architecture.md)** - Docker 架构、卷挂载和代码执行流程
+- **[部署指南](docs/deployment.md)** - 使用 Docker Compose、systemd 进行生产部署，安全加固
+- **[用户指南](docs/user-guide.md)** - 快速开始、常见操作和故障排查
+
+### API 与集成
+- **[API 文档](docs/api.md)** - gRPC 和 WebSocket API 参考和示例
+- **[API 认证](docs/api-authentication.md)** - Token 使用和认证模式
+
+### 安全
+- **[安全指南](docs/security.md)** - JWT 认证、token 生成、审计日志
+- **[TLS 设置](docs/tls-setup.md)** - TLS/WSS 加密配置
+
+### 其他资源
+- **[Week 7 总结](docs/week7-completion-summary.md)** - 最新开发里程碑
+- **[Phase 3 总结](docs/phase3-priority1-2-completion-summary.md)** - 功能完成概览
+
 ## Directory Layout
 ```
 server/
@@ -65,7 +86,16 @@ Copy `config.example.env` to `.env` (or inject variables via your process manage
 3. Generate a JWT for your user following [`docs/security.md`](docs/security.md#generating-tokens-for-testing) and call APIs as shown in [`docs/api-authentication.md`](docs/api-authentication.md).
 4. Tail the logs to verify audit events whenever you authenticate, start PTY sessions, or modify worktrees.
 
-## Next Steps
-- Flesh out gRPC service definitions in `api/proto`.
-- Implement service layer logic in `internal/service`.
-- Bridge gRPC/WebSocket endpoints to the Electron app clients.
+## 学习资源
+
+**初次使用 Emdash Server？** 从这里开始：
+
+1. **[架构指南](docs/architecture.md)** - 了解 Docker、卷挂载和代码执行的工作原理
+2. **[部署指南](docs/deployment.md)** - 使用 Docker Compose 部署服务端
+3. **[用户指南](docs/user-guide.md)** - 学习常见操作和故障排查
+4. **[API 文档](docs/api.md)** - 与 gRPC 和 WebSocket API 集成
+
+**开发者参考：**
+- 在 `api/proto` 中完善 gRPC 服务定义
+- 在 `internal/service` 中实现服务层逻辑
+- 将 gRPC/WebSocket 端点桥接到 Electron 应用客户端
