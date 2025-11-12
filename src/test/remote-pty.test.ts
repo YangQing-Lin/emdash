@@ -200,7 +200,7 @@ describe('RemotePtyService', () => {
     const createSocketSpy = vi
       .spyOn(service as any, 'createSocket')
       .mockRejectedValueOnce(new Error('boom'))
-      .mockImplementation((url: string) => original(url));
+      .mockImplementation(((url: string) => original(url)) as any);
 
     await expect(service.startPty({ id, owner })).resolves.toBe(id);
     await waitFor(() => (server.connections.has(id) ? true : undefined));

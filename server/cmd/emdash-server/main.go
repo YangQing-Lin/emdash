@@ -10,6 +10,7 @@ import (
 	"time"
 
 	creackpty "github.com/creack/pty"
+	agentpb "github.com/emdashhq/emdash-server/api/proto/agent"
 	gitpb "github.com/emdashhq/emdash-server/api/proto/git"
 	ptypb "github.com/emdashhq/emdash-server/api/proto/pty"
 	worktreepb "github.com/emdashhq/emdash-server/api/proto/worktree"
@@ -53,11 +54,13 @@ func main() {
 	go hub.Run()
 
 	ptyManager := service.NewPtyManager(logger, hub)
+	agentManager := service.NewAgentManager(logger, hub)
 
 	grpcServer := grpc.NewServer()
 	worktreepb.RegisterWorktreeServiceServer(grpcServer, emdgrpc.NewWorktreeServer(logger))
 	gitpb.RegisterGitServiceServer(grpcServer, emdgrpc.NewGitServer(logger))
 	ptypb.RegisterPtyServiceServer(grpcServer, emdgrpc.NewPtyServer(logger, ptyManager))
+	agentpb.RegisterAgentServiceServer(grpcServer, emdgrpc.NewAgentServer(logger, agentManager))
 
 	go func() {
 		logger.Info("gRPC server listening on :50051", zap.String("addr", grpcAddress))
@@ -87,7 +90,7 @@ func main() {
 	<-ctx.Done()
 	logger.Info("Shutdown signal received", zap.Any("signal", ctx.Err()))
 
-	shutdownGracefully(logger, grpcServer, httpServer, hub, ptyManager)
+	shutdownGracefully(logger, grpcServer, httpServer, hub, ptyManager, agentManager)
 }
 
 func ensureProtoRuntime(logger *zap.Logger) {
@@ -110,7 +113,7 @@ func bootstrapPTY(logger *zap.Logger) {
 	logger.Debug("pseudo-terminal allocation succeeded")
 }
 
-func shutdownGracefully(logger *zap.Logger, grpcServer *grpc.Server, httpServer *http.Server, hub *ws.Hub, ptyManager *service.PtyManager) {
+func shutdownGracefully(logger *zap.Logger, grpcServer *grpc.Server, httpServer *http.Server, hub *ws.Hub, ptyManager *service.PtyManager, agentManager *service.AgentManager) {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -124,6 +127,10 @@ func shutdownGracefully(logger *zap.Logger, grpcServer *grpc.Server, httpServer 
 	if ptyManager != nil {
 		logger.Info("Shutting down PTY sessions")
 		ptyManager.Shutdown()
+	}
+	if agentManager != nil {
+		logger.Info("Shutting down agent sessions")
+		agentManager.Shutdown()
 	}
 
 	if hub != nil {

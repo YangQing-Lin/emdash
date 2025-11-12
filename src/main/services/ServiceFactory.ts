@@ -7,6 +7,8 @@ import { localPtyService } from './local/LocalPtyService';
 import { remotePtyService } from './remote/RemotePtyService';
 import { localCodexService } from './local/LocalCodexService';
 import { localGitService } from './local/LocalGitService';
+import { remoteCodexService } from './remote/RemoteCodexService';
+import { remoteWorktreeService } from './remote/RemoteWorktreeService';
 
 type ServiceMode = 'local' | 'remote';
 
@@ -51,6 +53,9 @@ class ServiceFactory {
     if (this.mode === 'local') {
       return localWorktreeService;
     }
+    if (this.mode === 'remote') {
+      return remoteWorktreeService;
+    }
     throw new Error(`Worktree service not available for mode: ${this.mode}`);
   }
 
@@ -73,6 +78,9 @@ class ServiceFactory {
   getCodexService(): ICodexService {
     if (this.mode === 'local') {
       return localCodexService;
+    }
+    if (this.mode === 'remote') {
+      return remoteCodexService;
     }
     throw new Error(`Codex service not available for mode: ${this.mode}`);
   }

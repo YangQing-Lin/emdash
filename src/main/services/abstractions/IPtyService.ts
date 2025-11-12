@@ -14,6 +14,7 @@ export interface IPtyService {
     env?: NodeJS.ProcessEnv;
     cols?: number;
     rows?: number;
+    owner?: any; // WebContents from Electron (optional for remote PTY)
   }): Promise<string>;
 
   /**
