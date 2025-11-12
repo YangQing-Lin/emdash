@@ -62,3 +62,5 @@ optional_env:
 - [ ] Tests and checks pass: `npm run lint`, `npm run type-check`, `npx vitest run`.
 - [ ] No stray build artifacts or secrets committed.
 - [ ] Documented any schema or config changes impacting users.
+
+- Git 提交信息只能描述开发的内容，不要添加开发人等信息。格式例子 feat: 完成xxx功能模块开发
