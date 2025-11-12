@@ -1,0 +1,53 @@
+services:
+  emdash-server:
+    image: emdash-server:latest
+    container_name: emdash-server
+    restart: unless-stopped
+
+    ports:
+      - "50051:50051"  # gRPC
+      - "8080:8080"    # WebSocket
+
+    environment:
+      # Authentication secret (override with .env file or environment variable)
+      AUTH_SECRET: ${AUTH_SECRET:-change-me-in-production}
+
+      # TLS Configuration
+      TLS_ENABLED: ${TLS_ENABLED:-false}
+      TLS_CERT_FILE: ${TLS_CERT_FILE:-/app/certs/server.crt}
+      TLS_KEY_FILE: ${TLS_KEY_FILE:-/app/certs/server.key}
+
+    volumes:
+      # Persist project data
+      - ./data/projects:/data/projects
+
+      # Persist worktrees
+      - ./data/worktrees:/data/worktrees
+
+      # Persist logs
+      - ./data/logs:/data/logs
+
+      # TLS certificates (optional, only needed if TLS_ENABLED=true)
+      - ./certs:/app/certs:ro
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "50051"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+networks:
+  default:
+    name: emdash-network

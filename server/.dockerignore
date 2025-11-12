@@ -1,0 +1,43 @@
+# Compiled binaries
+emdash-server
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test files and coverage
+*.test
+*.out
+coverage.txt
+*.prof
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Logs
+*.log
+
+# Scripts (keep if needed for container setup)
+# scripts/
+
+# Example files
+*.example.*
+!config.example.env
