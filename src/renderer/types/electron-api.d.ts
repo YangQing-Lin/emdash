@@ -1,5 +1,6 @@
 // Updated for Codex integration
 import type { ResolvedContainerConfig, RunnerEvent, RunnerMode } from '../../shared/container';
+import type { RemoteConnectionStatus } from '@shared/remoteConnection';
 
 export {};
 
@@ -326,6 +327,9 @@ declare global {
       // Run events
       onRunEvent: (callback: (event: RunnerEvent) => void) => void;
       removeRunEventListeners: () => void;
+      onRemoteConnectionStatus: (
+        listener: (payload: RemoteConnectionStatus) => void
+      ) => () => void;
 
       // GitHub integration
       githubAuth: () => Promise<{
@@ -430,6 +434,7 @@ declare global {
 
       // Database operations
       getProjects: () => Promise<any[]>;
+      projectCreate: (project: any) => Promise<{ success: boolean; error?: string }>;
       saveProject: (project: any) => Promise<{ success: boolean; error?: string }>;
       getWorkspaces: (projectId?: string) => Promise<any[]>;
       saveWorkspace: (workspace: any) => Promise<{ success: boolean; error?: string }>;
@@ -698,6 +703,7 @@ export interface ElectronAPI {
   // Run events
   onRunEvent: (callback: (event: RunnerEvent) => void) => void;
   removeRunEventListeners: () => void;
+  onRemoteConnectionStatus: (listener: (payload: RemoteConnectionStatus) => void) => () => void;
 
   // GitHub integration
   githubAuth: () => Promise<{
@@ -782,6 +788,7 @@ export interface ElectronAPI {
 
   // Database operations
   getProjects: () => Promise<any[]>;
+  projectCreate: (project: any) => Promise<{ success: boolean; error?: string }>;
   saveProject: (project: any) => Promise<{ success: boolean; error?: string }>;
   getWorkspaces: (projectId?: string) => Promise<any[]>;
   saveWorkspace: (workspace: any) => Promise<{ success: boolean; error?: string }>;

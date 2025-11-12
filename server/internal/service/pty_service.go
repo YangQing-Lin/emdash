@@ -21,6 +21,8 @@ import (
 const (
 	defaultShell     = "/bin/bash"
 	readBufferSize   = 4096
+	bufferMaxSize    = 4 * 1024
+	bufferFlushDelay = 50 * time.Millisecond
 	defaultCols      = 80
 	defaultRows      = 24
 	sessionChanSize  = 128
@@ -41,14 +43,17 @@ var (
 
 // PtySession encapsulates a running PTY-backed shell process.
 type PtySession struct {
-	ID         string
-	Pty        *os.File
-	Tty        *os.File
-	Cmd        *exec.Cmd
-	mu         sync.Mutex
-	closed     bool
-	outputChan chan []byte
-	exitChan   chan int
+	ID          string
+	Pty         *os.File
+	Tty         *os.File
+	Cmd         *exec.Cmd
+	buffer      []byte
+	bufferMu    sync.Mutex
+	bufferTimer *time.Timer
+	mu          sync.Mutex
+	closed      bool
+	outputChan  chan []byte
+	exitChan    chan int
 
 	exitCode   int
 	exitSignal string
@@ -333,7 +338,10 @@ func (pm *PtyManager) buildWinSize(cols, rows uint32) *pty.Winsize {
 }
 
 func (pm *PtyManager) streamOutput(session *PtySession) {
-	defer close(session.outputChan)
+	defer func() {
+		pm.flushBufferedOutput(session, true)
+		close(session.outputChan)
+	}()
 
 	buf := make([]byte, readBufferSize)
 	for {
@@ -341,7 +349,7 @@ func (pm *PtyManager) streamOutput(session *PtySession) {
 		if n > 0 {
 			chunk := make([]byte, n)
 			copy(chunk, buf[:n])
-			pm.pushOutput(session.ID, chunk)
+			pm.queueBufferedOutput(session, chunk)
 			select {
 			case session.outputChan <- chunk:
 			default:
@@ -356,6 +364,51 @@ func (pm *PtyManager) streamOutput(session *PtySession) {
 			return
 		}
 	}
+}
+
+func (pm *PtyManager) queueBufferedOutput(session *PtySession, chunk []byte) {
+	if len(chunk) == 0 {
+		return
+	}
+
+	session.bufferMu.Lock()
+	startTimer := len(session.buffer) == 0
+	session.buffer = append(session.buffer, chunk...)
+	bufferLen := len(session.buffer)
+	if startTimer {
+		session.bufferTimer = time.AfterFunc(bufferFlushDelay, func() {
+			pm.flushBufferedOutput(session, false)
+		})
+	}
+	session.bufferMu.Unlock()
+
+	if bufferLen > bufferMaxSize {
+		pm.flushBufferedOutput(session, true)
+	}
+}
+
+func (pm *PtyManager) flushBufferedOutput(session *PtySession, stopTimer bool) {
+	session.bufferMu.Lock()
+	timer := session.bufferTimer
+	session.bufferTimer = nil
+	if len(session.buffer) == 0 {
+		session.bufferMu.Unlock()
+		if stopTimer && timer != nil {
+			timer.Stop()
+		}
+		return
+	}
+
+	data := make([]byte, len(session.buffer))
+	copy(data, session.buffer)
+	session.buffer = session.buffer[:0]
+	session.bufferMu.Unlock()
+
+	if stopTimer && timer != nil {
+		timer.Stop()
+	}
+
+	pm.pushOutput(session.ID, data)
 }
 
 func (pm *PtyManager) waitForExit(session *PtySession) {
@@ -419,6 +472,7 @@ func (pm *PtyManager) finalizeSession(session *PtySession, exitCode int, signal 
 		close(session.done)
 	})
 
+	pm.flushBufferedOutput(session, true)
 	pm.pushExit(session.ID, exitCode, signal)
 }
 

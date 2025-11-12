@@ -4,13 +4,22 @@ import { EventEmitter } from 'events';
 import type { IPtyService } from '../abstractions/IPtyService';
 import { log } from '../../lib/logger';
 import { REMOTE_SERVER_URL } from './config';
+import { createRemoteWebSocket } from './ws-client';
 import type { RemotePtyClientMessage, RemotePtyServerMessage } from './types';
+import { broadcastRemoteConnectionStatus } from './connectionStatus';
 
 type PtyStartOptions = Parameters<IPtyService['startPty']>[0];
 type PtyStartOptionsWithOwner = PtyStartOptions & { owner?: WebContents };
 
 const MAX_CONNECT_ATTEMPTS = 3;
-const BASE_RETRY_DELAY_MS = 250;
+const INITIAL_BACKOFF_DELAY_MS = 1000;
+const MAX_BACKOFF_DELAY_MS = 30_000;
+
+interface PtySessionState {
+  shouldReconnect: boolean;
+  reconnectAttempts: number;
+  reconnectTimer?: NodeJS.Timeout;
+}
 
 /**
  * Remote PTY service that proxies terminal IO over WebSocket.
@@ -20,6 +29,7 @@ export class RemotePtyService implements IPtyService {
   private readonly connections = new Map<string, WebSocket>();
   private readonly owners = new Map<string, WebContents>();
   private readonly exited = new Set<string>();
+  private readonly sessionStates = new Map<string, PtySessionState>();
   private readonly logger = log;
 
   constructor(private readonly serverUrl: string = 'ws://localhost:8080') {
@@ -35,6 +45,7 @@ export class RemotePtyService implements IPtyService {
     }
 
     this.exited.delete(id);
+    this.initializeSessionState(id);
 
     const resolvedOwner = owner ?? this.resolveOwner();
     if (resolvedOwner) {
@@ -61,6 +72,8 @@ export class RemotePtyService implements IPtyService {
       this.connections.set(id, socket);
       this.attachSocketHandlers(id, socket);
     } catch (error) {
+      this.clearReconnectTimer(id);
+      this.sessionStates.delete(id);
       this.owners.delete(id);
       throw error;
     }
@@ -87,6 +100,8 @@ export class RemotePtyService implements IPtyService {
       throw new Error(`No active PTY connection for ${id}`);
     }
 
+    this.disableReconnect(id);
+
     if (socket.readyState === WebSocket.OPEN) {
       const payload: RemotePtyClientMessage = { type: 'kill' };
       socket.send(JSON.stringify(payload));
@@ -94,6 +109,8 @@ export class RemotePtyService implements IPtyService {
 
     socket.close();
     this.emitExit(id, { exitCode: 143 });
+    this.cleanup(id);
+    this.exited.delete(id);
   }
 
   private async connectWithRetry(id: string, attempt = 1): Promise<WebSocket> {
@@ -109,7 +126,7 @@ export class RemotePtyService implements IPtyService {
         this.emitExit(id, { exitCode: -1 });
         throw new Error(`Unable to connect to remote PTY ${id}: ${errorMessage}`);
       }
-      const delayMs = BASE_RETRY_DELAY_MS * 2 ** (attempt - 1);
+      const delayMs = Math.min(INITIAL_BACKOFF_DELAY_MS * 2 ** (attempt - 1), MAX_BACKOFF_DELAY_MS);
       this.logger.warn('RemotePtyService:retryConnect', { id, attempt, delayMs });
       await this.delay(delayMs);
       return this.connectWithRetry(id, attempt + 1);
@@ -118,7 +135,7 @@ export class RemotePtyService implements IPtyService {
 
   private createSocket(url: string): Promise<WebSocket> {
     return new Promise((resolve, reject) => {
-      const socket = new WebSocket(url);
+      const socket = createRemoteWebSocket(url);
 
       const cleanup = (): void => {
         socket.off('open', handleOpen);
@@ -173,6 +190,7 @@ export class RemotePtyService implements IPtyService {
         this.emitData(id, message.data ?? '');
         break;
       case 'pty:exit':
+        this.disableReconnect(id);
         this.emitExit(id, { exitCode: message.exitCode, signal: message.signal });
         break;
       default:
@@ -184,11 +202,23 @@ export class RemotePtyService implements IPtyService {
   }
 
   private handleClose(id: string, code: number, reason?: Buffer): void {
+    const state = this.sessionStates.get(id);
+    const shouldReconnect = Boolean(state?.shouldReconnect);
+
     this.logger.info('RemotePtyService:close', {
       id,
       code,
       reason: reason?.toString(),
+      shouldReconnect,
     });
+
+    this.connections.delete(id);
+
+    if (shouldReconnect) {
+      this.scheduleReconnect(id);
+      return;
+    }
+
     this.emitExit(id, {});
     this.cleanup(id);
     this.exited.delete(id);
@@ -276,6 +306,84 @@ export class RemotePtyService implements IPtyService {
   private cleanup(id: string): void {
     this.connections.delete(id);
     this.owners.delete(id);
+    this.clearReconnectTimer(id);
+    this.sessionStates.delete(id);
+  }
+
+  private initializeSessionState(id: string): PtySessionState {
+    const state: PtySessionState = { shouldReconnect: true, reconnectAttempts: 0 };
+    this.clearReconnectTimer(id);
+    this.sessionStates.set(id, state);
+    return state;
+  }
+
+  private disableReconnect(id: string): void {
+    const state = this.sessionStates.get(id);
+    if (!state) {
+      return;
+    }
+    state.shouldReconnect = false;
+    this.clearReconnectTimer(id);
+  }
+
+  private clearReconnectTimer(id: string): void {
+    const state = this.sessionStates.get(id);
+    if (state?.reconnectTimer) {
+      clearTimeout(state.reconnectTimer);
+      state.reconnectTimer = undefined;
+    }
+  }
+
+  private scheduleReconnect(id: string): void {
+    const state = this.sessionStates.get(id);
+    if (!state || !state.shouldReconnect || state.reconnectTimer) {
+      return;
+    }
+
+    const attempt = state.reconnectAttempts + 1;
+    state.reconnectAttempts = attempt;
+    const delayMs = Math.min(INITIAL_BACKOFF_DELAY_MS * 2 ** (attempt - 1), MAX_BACKOFF_DELAY_MS);
+
+    broadcastRemoteConnectionStatus({
+      service: 'pty',
+      id,
+      phase: 'reconnecting',
+      attempt,
+      nextDelayMs: delayMs,
+    });
+
+    this.logger.warn('RemotePtyService:reconnectScheduled', { id, attempt, delayMs });
+
+    state.reconnectTimer = setTimeout(async () => {
+      state.reconnectTimer = undefined;
+      if (!state.shouldReconnect) {
+        return;
+      }
+
+      const url = this.buildPtyUrl(id);
+      try {
+        this.logger.debug('RemotePtyService:reconnectAttempt', { id, attempt, url });
+        const socket = await this.createSocket(url);
+        if (!state.shouldReconnect) {
+          socket.close();
+          return;
+        }
+        this.connections.set(id, socket);
+        this.attachSocketHandlers(id, socket);
+        state.reconnectAttempts = 0;
+        this.emitPtyStarted(id);
+        broadcastRemoteConnectionStatus({
+          service: 'pty',
+          id,
+          phase: 'reconnected',
+          attempt,
+        });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.logger.error('RemotePtyService:reconnectFailed', { id, attempt, error: errorMessage });
+        this.scheduleReconnect(id);
+      }
+    }, delayMs);
   }
 
   private buildPtyUrl(id: string): string {

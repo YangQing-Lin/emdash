@@ -1,4 +1,5 @@
 import type { TerminalSnapshotPayload } from '#types/terminalSnapshot';
+import type { RemoteConnectionStatus } from '@shared/remoteConnection';
 
 // Global type declarations for Electron API
 declare global {
@@ -110,6 +111,7 @@ declare global {
       getRunDiff: (runId: string) => Promise<any>;
       onRunEvent: (callback: (event: any) => void) => void;
       removeRunEventListeners: () => void;
+      onRemoteConnectionStatus: (listener: (payload: RemoteConnectionStatus) => void) => () => void;
       githubAuth: () => Promise<{ success: boolean; token?: string; user?: any; error?: string }>;
       githubIsAuthenticated: () => Promise<boolean>;
       githubGetUser: () => Promise<any>;
@@ -166,6 +168,7 @@ declare global {
       }>;
       // Database methods
       getProjects: () => Promise<any[]>;
+      projectCreate: (project: any) => Promise<{ success: boolean; error?: string }>;
       saveProject: (project: any) => Promise<{ success: boolean; error?: string }>;
       getWorkspaces: (projectId?: string) => Promise<any[]>;
       saveWorkspace: (workspace: any) => Promise<{ success: boolean; error?: string }>;

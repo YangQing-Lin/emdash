@@ -18,6 +18,8 @@ import {
   promisifyUnary,
 } from './grpc-client';
 import { REMOTE_GRPC_URL, REMOTE_SERVER_URL } from './config';
+import { createRemoteWebSocket } from './ws-client';
+import { broadcastRemoteConnectionStatus } from './connectionStatus';
 
 type AgentSocketMessage =
   | {
@@ -55,8 +57,9 @@ const FRIENDLY_ERRORS = {
   stop: 'Unable to stop the remote Codex agent. Please try again.',
 };
 
-const MAX_WS_ATTEMPTS = 3;
-const BASE_WS_RETRY_DELAY_MS = 250;
+const MAX_INITIAL_WS_ATTEMPTS = 3;
+const WS_INITIAL_BACKOFF_MS = 1000;
+const WS_MAX_BACKOFF_MS = 30_000;
 
 export class RemoteCodexService extends EventEmitter implements ICodexService {
   private readonly grpcClient: GrpcClient;
@@ -335,14 +338,14 @@ export class RemoteCodexService extends EventEmitter implements ICodexService {
       this.attachSocketHandlers(workspaceId, socket);
       this.logger.info('RemoteCodexService:wsConnected', { workspaceId });
     } catch (error) {
-      if (attempt >= MAX_WS_ATTEMPTS) {
+      if (attempt >= MAX_INITIAL_WS_ATTEMPTS) {
         this.logger.error('RemoteCodexService:wsConnectFailed', {
           workspaceId,
           error: formatGrpcError(error),
         });
         throw new Error('Failed to connect to remote Codex stream');
       }
-      const delay = BASE_WS_RETRY_DELAY_MS * 2 ** (attempt - 1);
+      const delay = Math.min(WS_INITIAL_BACKOFF_MS * 2 ** (attempt - 1), WS_MAX_BACKOFF_MS);
       this.logger.warn('RemoteCodexService:wsRetry', { workspaceId, attempt, delay });
       await this.delay(delay);
       await this.connectWebSocket(workspaceId, attempt + 1);
@@ -465,44 +468,20 @@ export class RemoteCodexService extends EventEmitter implements ICodexService {
   }
 
   private handleSocketClose(workspaceId: string, code: number, reason?: Buffer): void {
+    const shouldReconnect = this.agents.has(workspaceId);
     this.logger.warn('RemoteCodexService:wsClosed', {
       workspaceId,
       code,
       reason: reason?.toString(),
+      shouldReconnect,
     });
     this.wsConnections.delete(workspaceId);
 
-    if (!this.agents.has(workspaceId)) {
+    if (!shouldReconnect) {
       return;
     }
 
-    const previousAttempts = this.wsRetryCounts.get(workspaceId) ?? 0;
-    if (previousAttempts >= MAX_WS_ATTEMPTS) {
-      this.logger.error('RemoteCodexService:wsMaxRetries', { workspaceId });
-      this.emit('codex:error', {
-        workspaceId,
-        error: 'Lost connection to remote Codex stream',
-        agentId: this.agents.get(workspaceId)?.id,
-      });
-      return;
-    }
-
-    const nextAttempt = previousAttempts + 1;
-    this.wsRetryCounts.set(workspaceId, nextAttempt);
-    const delay = BASE_WS_RETRY_DELAY_MS * 2 ** (nextAttempt - 1);
-    const timer = setTimeout(() => {
-      this.wsRetryTimers.delete(workspaceId);
-      if (!this.agents.has(workspaceId)) {
-        return;
-      }
-      this.connectWebSocket(workspaceId, nextAttempt).catch((error) => {
-        this.logger.error('RemoteCodexService:wsReconnectFailed', {
-          workspaceId,
-          error: formatGrpcError(error),
-        });
-      });
-    }, delay);
-    this.wsRetryTimers.set(workspaceId, timer);
+    this.scheduleWsReconnect(workspaceId);
   }
 
   private cleanup(workspaceId: string): void {
@@ -523,6 +502,70 @@ export class RemoteCodexService extends EventEmitter implements ICodexService {
     this.wsRetryCounts.delete(workspaceId);
     this.agents.delete(workspaceId);
     this.activeConversations.delete(workspaceId);
+  }
+
+  private scheduleWsReconnect(workspaceId: string): void {
+    if (!this.agents.has(workspaceId)) {
+      return;
+    }
+    if (this.wsRetryTimers.has(workspaceId)) {
+      return;
+    }
+    const attempt = (this.wsRetryCounts.get(workspaceId) ?? 0) + 1;
+    this.wsRetryCounts.set(workspaceId, attempt);
+    const delay = Math.min(WS_INITIAL_BACKOFF_MS * 2 ** (attempt - 1), WS_MAX_BACKOFF_MS);
+
+    broadcastRemoteConnectionStatus({
+      service: 'codex',
+      id: workspaceId,
+      phase: 'reconnecting',
+      attempt,
+      nextDelayMs: delay,
+    });
+
+    this.logger.warn('RemoteCodexService:wsReconnectScheduled', {
+      workspaceId,
+      attempt,
+      delay,
+    });
+
+    const timer = setTimeout(async () => {
+      this.wsRetryTimers.delete(workspaceId);
+      if (!this.agents.has(workspaceId)) {
+        return;
+      }
+      try {
+        await this.performWsReconnect(workspaceId, attempt);
+      } catch (error) {
+        this.logger.error('RemoteCodexService:wsReconnectFailed', {
+          workspaceId,
+          attempt,
+          error: formatGrpcError(error),
+        });
+        this.scheduleWsReconnect(workspaceId);
+      }
+    }, delay);
+    this.wsRetryTimers.set(workspaceId, timer);
+  }
+
+  private async performWsReconnect(workspaceId: string, attempt: number): Promise<void> {
+    const url = this.buildAgentSocketUrl(workspaceId);
+    this.logger.debug('RemoteCodexService:wsReconnectAttempt', { workspaceId, attempt, url });
+    const socket = await this.createSocket(url);
+    if (!this.agents.has(workspaceId)) {
+      socket.close();
+      return;
+    }
+    this.wsConnections.set(workspaceId, socket);
+    this.attachSocketHandlers(workspaceId, socket);
+    this.wsRetryCounts.set(workspaceId, 0);
+    this.logger.info('RemoteCodexService:wsReconnected', { workspaceId, attempt });
+    broadcastRemoteConnectionStatus({
+      service: 'codex',
+      id: workspaceId,
+      phase: 'reconnected',
+      attempt,
+    });
   }
 
   private streamEventName(workspaceId: string): string {
@@ -551,7 +594,7 @@ export class RemoteCodexService extends EventEmitter implements ICodexService {
 
   private createSocket(url: string): Promise<WebSocket> {
     return new Promise((resolve, reject) => {
-      const socket = new WebSocket(url);
+      const socket = createRemoteWebSocket(url);
 
       const cleanup = (): void => {
         socket.off('open', handleOpen);

@@ -5,6 +5,7 @@ import { FolderOpen } from 'lucide-react';
 import LeftSidebar from './components/LeftSidebar';
 import ProjectMainView from './components/ProjectMainView';
 import WorkspaceModal from './components/WorkspaceModal';
+import ProjectModeDialog, { type ProjectModeSelection } from './components/ProjectModeDialog';
 import ChatInterface from './components/ChatInterface';
 import MultiAgentWorkspace from './components/MultiAgentWorkspace';
 import { Toaster } from './components/ui/toaster';
@@ -33,6 +34,7 @@ import SettingsModal from './components/SettingsModal';
 import CommandPalette from './components/CommandPalette';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { usePlanToasts } from './hooks/usePlanToasts';
+import { useRemoteConnectionToasts } from './hooks/useRemoteConnectionToasts';
 import { terminalSessionRegistry } from './terminal/SessionRegistry';
 
 const TERMINAL_PROVIDER_IDS = [
@@ -261,6 +263,12 @@ interface Workspace {
   metadata?: WorkspaceMetadata | null;
 }
 
+interface ProjectModeDialogState {
+  projectName: string;
+  defaultMode: 'local' | 'remote';
+  initialRemoteServerId: string | null;
+}
+
 const TITLEBAR_HEIGHT = '36px';
 const PANEL_LAYOUT_STORAGE_KEY = 'emdash.layout.left-main-right.v2';
 const DEFAULT_PANEL_LAYOUT: [number, number, number] = [20, 60, 20];
@@ -282,6 +290,7 @@ const MAIN_PANEL_MIN_SIZE = 30;
 
 const AppContent: React.FC = () => {
   usePlanToasts();
+  useRemoteConnectionToasts();
   // Initialize theme on app startup
   const { effectiveTheme } = useTheme();
 
@@ -305,10 +314,61 @@ const AppContent: React.FC = () => {
   const [isClaudeInstalled, setIsClaudeInstalled] = useState<boolean | null>(null);
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [showCommandPalette, setShowCommandPalette] = useState<boolean>(false);
+  const [projectModeDialogState, setProjectModeDialogState] =
+    useState<ProjectModeDialogState | null>(null);
+  const projectModeResolverRef = useRef<((selection: ProjectModeSelection | null) => void) | null>(
+    null
+  );
   const showGithubRequirement = !ghInstalled || !isAuthenticated;
   // Show agent requirements block if none of the supported CLIs are detected locally.
   // We only actively detect Codex and Claude Code; Factory (Droid) docs are shown as an alternative.
   const showAgentRequirement = isCodexInstalled === false && isClaudeInstalled === false;
+
+  useEffect(() => {
+    return () => {
+      if (projectModeResolverRef.current) {
+        projectModeResolverRef.current(null);
+        projectModeResolverRef.current = null;
+      }
+    };
+  }, []);
+
+  const resolveProjectModeRequest = useCallback((result: ProjectModeSelection | null) => {
+    if (projectModeResolverRef.current) {
+      projectModeResolverRef.current(result);
+      projectModeResolverRef.current = null;
+    }
+  }, []);
+
+  const requestProjectModeSelection = useCallback(
+    (options: { projectName: string; defaultMode?: 'local' | 'remote' }) => {
+      if (projectModeResolverRef.current) {
+        projectModeResolverRef.current(null);
+      }
+      return new Promise<ProjectModeSelection | null>((resolve) => {
+        projectModeResolverRef.current = resolve;
+        setProjectModeDialogState({
+          projectName: options.projectName,
+          defaultMode: options.defaultMode ?? 'local',
+          initialRemoteServerId: null,
+        });
+      });
+    },
+    []
+  );
+
+  const handleProjectModeDialogConfirm = useCallback(
+    (selection: ProjectModeSelection) => {
+      resolveProjectModeRequest(selection);
+      setProjectModeDialogState(null);
+    },
+    [resolveProjectModeRequest]
+  );
+
+  const handleProjectModeDialogCancel = useCallback(() => {
+    resolveProjectModeRequest(null);
+    setProjectModeDialogState(null);
+  }, [resolveProjectModeRequest]);
 
   // No explicit winner propagation: the Right Sidebar lets users create PRs per variant directly.
 
@@ -639,6 +699,15 @@ const AppContent: React.FC = () => {
           const projectName =
             canonicalPath.split(/[/\\]/).filter(Boolean).pop() || 'Unknown Project';
 
+          const modeSelection = await requestProjectModeSelection({ projectName });
+          if (!modeSelection) {
+            toast({
+              title: 'Project not added',
+              description: 'Project mode selection was canceled.',
+            });
+            return;
+          }
+
           const baseProject: Project = {
             id: Date.now().toString(),
             name: projectName,
@@ -649,8 +718,8 @@ const AppContent: React.FC = () => {
               remote: gitInfo.remote || undefined,
               branch: gitInfo.branch || undefined,
             },
-            mode: 'local', // 默认本地模式
-            remoteServerId: null,
+            mode: modeSelection.mode,
+            remoteServerId: modeSelection.mode === 'remote' ? modeSelection.remoteServerId ?? null : null,
             workspaces: [],
           };
 
@@ -665,7 +734,7 @@ const AppContent: React.FC = () => {
                 },
               });
 
-              const saveResult = await window.electronAPI.saveProject(projectWithGithub);
+              const saveResult = await window.electronAPI.projectCreate(projectWithGithub);
               if (saveResult.success) {
                 setProjects((prev) => [...prev, projectWithGithub]);
                 activateProjectView(projectWithGithub);
@@ -695,7 +764,7 @@ const AppContent: React.FC = () => {
               },
             });
 
-            const saveResult = await window.electronAPI.saveProject(projectWithoutGithub);
+            const saveResult = await window.electronAPI.projectCreate(projectWithoutGithub);
             if (saveResult.success) {
               setProjects((prev) => [...prev, projectWithoutGithub]);
               activateProjectView(projectWithoutGithub);
@@ -1585,6 +1654,14 @@ const AppContent: React.FC = () => {
             defaultBranch={selectedProject?.gitInfo.branch || 'main'}
             existingNames={(selectedProject?.workspaces || []).map((w) => w.name)}
             projectPath={selectedProject?.path}
+          />
+          <ProjectModeDialog
+            open={!!projectModeDialogState}
+            projectName={projectModeDialogState?.projectName}
+            defaultMode={projectModeDialogState?.defaultMode ?? 'local'}
+            initialRemoteServerId={projectModeDialogState?.initialRemoteServerId ?? null}
+            onCancel={handleProjectModeDialogCancel}
+            onConfirm={handleProjectModeDialogConfirm}
           />
           <Toaster />
         </RightSidebarProvider>

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { TerminalSnapshotPayload } from './types/terminalSnapshot';
+import type { RemoteConnectionStatus } from '../shared/remoteConnection';
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -220,6 +221,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('remote-server:test', payload),
   // Database methods
   getProjects: () => ipcRenderer.invoke('db:getProjects'),
+  projectCreate: (project: any) => ipcRenderer.invoke('project:create', project),
   saveProject: (project: any) => ipcRenderer.invoke('db:saveProject', project),
   getWorkspaces: (projectId?: string) => ipcRenderer.invoke('db:getWorkspaces', projectId),
   saveWorkspace: (workspace: any) => ipcRenderer.invoke('db:saveWorkspace', workspace),
@@ -271,6 +273,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ) => {
     const channel = 'plan:event';
     const wrapped = (_: Electron.IpcRendererEvent, data: any) => listener(data);
+    ipcRenderer.on(channel, wrapped);
+    return () => ipcRenderer.removeListener(channel, wrapped);
+  },
+  onRemoteConnectionStatus: (listener: (payload: RemoteConnectionStatus) => void) => {
+    const channel = 'remote:connection-status';
+    const wrapped = (_: Electron.IpcRendererEvent, data: RemoteConnectionStatus) => listener(data);
     ipcRenderer.on(channel, wrapped);
     return () => ipcRenderer.removeListener(channel, wrapped);
   },
@@ -507,6 +515,7 @@ export interface ElectronAPI {
 
   onRunEvent: (callback: (event: any) => void) => void;
   removeRunEventListeners: () => void;
+  onRemoteConnectionStatus: (listener: (payload: RemoteConnectionStatus) => void) => () => void;
   loadContainerConfig: (workspacePath: string) => Promise<
     | { ok: true; config: any; sourcePath: string | null }
     | {
@@ -581,6 +590,7 @@ export interface ElectronAPI {
 
   // Database methods
   getProjects: () => Promise<any[]>;
+  projectCreate: (project: any) => Promise<{ success: boolean; error?: string }>;
   saveProject: (project: any) => Promise<{ success: boolean; error?: string }>;
   getWorkspaces: (projectId?: string) => Promise<any[]>;
   saveWorkspace: (workspace: any) => Promise<{ success: boolean; error?: string }>;

@@ -1,11 +1,14 @@
 package websocket
 
 import (
+	"compress/flate"
 	"net/http"
 
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 )
+
+const wsCompressionLevel = flate.DefaultCompression
 
 // Handler upgrades HTTP connections to websocket clients managed by the hub.
 type Handler struct {
@@ -27,6 +30,7 @@ func NewHandler(hub *Hub, logger *zap.Logger, writer PtyInputWriter) *Handler {
 			CheckOrigin: func(r *http.Request) bool {
 				return true // Dev mode; tighten for production.
 			},
+			EnableCompression: true,
 		},
 		logger: logger.Named("websocket-handler"),
 	}
@@ -49,6 +53,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Error("failed to upgrade websocket connection", zap.Error(err))
 		return
+	}
+
+	conn.EnableWriteCompression(true)
+	if err := conn.SetCompressionLevel(wsCompressionLevel); err != nil {
+		h.logger.Warn("failed to configure websocket compression level", zap.Error(err))
 	}
 
 	client := NewClient(h.hub, conn, ptyID, h.writer)

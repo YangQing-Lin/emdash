@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { getMainWindow } from '../app/window';
+import { databaseService } from '../services/DatabaseService';
 
 const execAsync = promisify(exec);
 
@@ -26,6 +27,16 @@ export function registerProjectIpc() {
     } catch (error) {
       console.error('Failed to open project:', error);
       return { success: false, error: 'Failed to open project directory' };
+    }
+  });
+
+  ipcMain.handle('project:create', async (_, project: any) => {
+    try {
+      await databaseService.saveProject(project);
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to create project:', error);
+      return { success: false, error: (error as Error).message };
     }
   });
 
