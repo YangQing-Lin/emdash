@@ -206,6 +206,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   jiraSearchIssues: (searchTerm: string, limit?: number) =>
     ipcRenderer.invoke('jira:searchIssues', searchTerm, limit),
   getCliProviders: () => ipcRenderer.invoke('connections:getCliProviders'),
+  // Remote server management
+  remoteServerAdd: (payload: { name: string; grpcUrl: string; wsUrl: string; token: string }) =>
+    ipcRenderer.invoke('remote-server:add', payload),
+  remoteServerList: () => ipcRenderer.invoke('remote-server:list'),
+  remoteServerGet: (id: string) => ipcRenderer.invoke('remote-server:get', id),
+  remoteServerUpdate: (payload: {
+    id: string;
+    data: Partial<{ name: string; grpcUrl: string; wsUrl: string; token: string }>;
+  }) => ipcRenderer.invoke('remote-server:update', payload),
+  remoteServerDelete: (id: string) => ipcRenderer.invoke('remote-server:delete', id),
+  remoteServerTest: (payload: { grpcUrl: string; wsUrl: string; token: string }) =>
+    ipcRenderer.invoke('remote-server:test', payload),
   // Database methods
   getProjects: () => ipcRenderer.invoke('db:getProjects'),
   saveProject: (project: any) => ipcRenderer.invoke('db:saveProject', project),

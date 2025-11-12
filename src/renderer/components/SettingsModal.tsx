@@ -6,6 +6,7 @@ import { Spinner } from './ui/spinner';
 import { X, Settings2, Cable, RefreshCw, GitBranch } from 'lucide-react';
 import VersionCard from './VersionCard';
 import IntegrationsCard from './IntegrationsCard';
+import RemoteServersCard from './RemoteServersCard';
 import CliProvidersList, { BASE_CLI_PROVIDERS } from './CliProvidersList';
 import TelemetryCard from './TelemetryCard';
 import ThemeCard from './ThemeCard';
@@ -126,6 +127,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         title: 'Connections',
         description: '',
         sections: [
+          {
+            title: 'Remote servers',
+            description: 'Manage remote agent servers for distributed workspaces',
+            render: () => <RemoteServersCard />,
+          },
           { title: 'Integrations', render: () => <IntegrationsCard /> },
           {
             title: 'CLI providers',

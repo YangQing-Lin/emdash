@@ -18,6 +18,7 @@ import { registerJiraIpc } from './jiraIpc';
 import { registerPlanLockIpc } from '../services/planLockIpc';
 import { registerSettingsIpc } from './settingsIpc';
 import { registerContainerIpc } from './containerIpc';
+import { registerRemoteServerIpc } from './remoteServerIpc';
 
 export function registerAllIpc() {
   // Core app/utility IPC
@@ -44,4 +45,5 @@ export function registerAllIpc() {
   registerConnectionsIpc();
   registerJiraIpc();
   registerPlanLockIpc();
+  registerRemoteServerIpc();
 }

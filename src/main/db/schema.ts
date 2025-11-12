@@ -1,6 +1,18 @@
 import { relations, sql } from 'drizzle-orm';
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
+export const remoteServers = sqliteTable('remote_servers', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  grpcUrl: text('grpc_url').notNull(),
+  wsUrl: text('ws_url').notNull(),
+  token: text('token').notNull(),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  lastUsed: text('last_used'),
+});
+
 export const projects = sqliteTable(
   'projects',
   {
@@ -11,6 +23,10 @@ export const projects = sqliteTable(
     gitBranch: text('git_branch'),
     githubRepository: text('github_repository'),
     githubConnected: integer('github_connected').notNull().default(0),
+    mode: text('mode').notNull().default('local'),
+    remoteServerId: text('remote_server_id').references(() => remoteServers.id, {
+      onDelete: 'set null',
+    }),
     createdAt: text('created_at')
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -88,8 +104,16 @@ export const messages = sqliteTable(
   })
 );
 
-export const projectsRelations = relations(projects, ({ many }) => ({
+export const projectsRelations = relations(projects, ({ many, one }) => ({
   workspaces: many(workspaces),
+  remoteServer: one(remoteServers, {
+    fields: [projects.remoteServerId],
+    references: [remoteServers.id],
+  }),
+}));
+
+export const remoteServersRelations = relations(remoteServers, ({ many }) => ({
+  projects: many(projects),
 }));
 
 export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
@@ -119,3 +143,4 @@ export type ProjectRow = typeof projects.$inferSelect;
 export type WorkspaceRow = typeof workspaces.$inferSelect;
 export type ConversationRow = typeof conversations.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;
+export type RemoteServerRow = typeof remoteServers.$inferSelect;
